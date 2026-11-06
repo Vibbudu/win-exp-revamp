@@ -1,4 +1,4 @@
-import { LineEdit, ScrollView, Button, ComboBox } from "std-widgets.slint";
+import { LineEdit, ScrollView } from "std-widgets.slint";
 
 export struct EntryItem {
     id: string,
@@ -32,10 +32,6 @@ export struct TabItem {
     is_active: bool,
 }
 
-export struct PreviewCell {
-    text: string,
-}
-
 export struct PreviewRow {
     cells: [string],
 }
@@ -45,21 +41,75 @@ export struct PropertyItem {
     value: string,
 }
 
-component IconButton inherits Rectangle {
-    in property <string> text;
+// Authentic Windows 11 Fluent 2-Tone Gold Folder Vector Icon (or File Glyph)
+component FluentEntryIcon inherits Rectangle {
+    in property <bool> is_dir: true;
+    in property <string> glyph: "\u{E8A5}";
+    in property <color> glyph_color: #cccccc;
+    in property <bool> large: false;
+
+    width: large ? 52px : 20px;
+    height: large ? 42px : 18px;
+    background: transparent;
+
+    // Back tab of Windows 11 folder
+    if root.is_dir: Rectangle {
+        x: large ? 2px : 1px;
+        y: large ? 3px : 2px;
+        width: large ? 22px : 9px;
+        height: large ? 10px : 5px;
+        border-radius: large ? 3px : 1.5px;
+        background: #d9960a;
+    }
+
+    // Back plate of folder
+    if root.is_dir: Rectangle {
+        x: large ? 2px : 1px;
+        y: large ? 7px : 4px;
+        width: large ? 48px : 18px;
+        height: large ? 30px : 12px;
+        border-radius: large ? 4px : 2px;
+        background: #e3a414;
+    }
+
+    // Front bright gold plate of Windows 11 folder
+    if root.is_dir: Rectangle {
+        x: large ? 2px : 1px;
+        y: large ? 11px : 6px;
+        width: large ? 48px : 18px;
+        height: large ? 27px : 10px;
+        border-radius: large ? 4px : 2px;
+        background: @linear-gradient(180deg, #ffd75e 0%, #f5ba18 100%);
+    }
+
+    // Non-directory file icon using Segoe Fluent Icons
+    if !root.is_dir: Text {
+        text: root.glyph;
+        font-family: "Segoe Fluent Icons";
+        font-size: large ? 34px : 15px;
+        color: root.glyph_color;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component FluentIconButton inherits Rectangle {
+    in property <string> icon;
     in property <bool> is_active: false;
     in property <bool> is_disabled: false;
+    in property <color> icon_color: #e0e0e0;
     callback clicked();
 
-    min_width: 32px;
-    min_height: 32px;
+    width: 32px;
+    height: 32px;
     border-radius: 4px;
-    background: is_disabled ? transparent : (touch.has-hover ? #333333 : (is_active ? #2e2e2e : transparent));
+    background: is_disabled ? transparent : (touch.pressed ? #292929 : (touch.has-hover ? #333333 : (is_active ? #2f2f2f : transparent)));
 
     Text {
-        text: root.text;
-        font-size: 14px;
-        color: is_disabled ? #555555 : (touch.has-hover ? #ffffff : #d0d0d0);
+        text: root.icon;
+        font-family: "Segoe Fluent Icons";
+        font-size: 13px;
+        color: is_disabled ? #5a5a5a : (touch.has-hover ? #ffffff : root.icon_color);
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -70,44 +120,22 @@ component IconButton inherits Rectangle {
     }
 }
 
-component CommandBarButton inherits Rectangle {
+component CaptionButton inherits Rectangle {
     in property <string> icon;
-    in property <string> label;
-    in property <bool> is_active: false;
-    in property <bool> has_dropdown: false;
+    in property <bool> is_close: false;
     callback clicked();
 
-    height: 36px;
-    border-radius: 4px;
-    background: touch.has-hover ? #323232 : (is_active ? #2d2d2d : transparent);
+    width: 46px;
+    height: 32px;
+    background: touch.has-hover ? (root.is_close ? #c42b1c : #2d2d2d) : transparent;
 
-    HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        spacing: 6px;
-        alignment: center;
-
-        Text {
-            text: root.icon;
-            font-size: 14px;
-            vertical-alignment: center;
-            color: touch.has-hover ? #60cdff : #cccccc;
-        }
-
-        if root.label != "": Text {
-            text: root.label;
-            font-size: 12px;
-            font-weight: 500;
-            vertical-alignment: center;
-            color: #e0e0e0;
-        }
-
-        if root.has_dropdown: Text {
-            text: "▾";
-            font-size: 10px;
-            vertical-alignment: center;
-            color: #888888;
-        }
+    Text {
+        text: root.icon;
+        font-family: "Segoe Fluent Icons";
+        font-size: 10px;
+        color: touch.has-hover ? #ffffff : #cccccc;
+        horizontal-alignment: center;
+        vertical-alignment: center;
     }
 
     touch := TouchArea {
@@ -115,34 +143,113 @@ component CommandBarButton inherits Rectangle {
     }
 }
 
-component NavItem inherits Rectangle {
+component CommandBarButton inherits Rectangle {
     in property <string> icon;
-    in property <string> label;
-    in property <bool> is_selected: false;
+    in property <string> label: "";
+    in property <color> icon_tint: #d8d8d8;
+    in property <bool> is_active: false;
+    in property <bool> has_dropdown: false;
+    in property <bool> is_disabled: false;
     callback clicked();
 
-    height: 32px;
+    height: 34px;
+    min-width: root.label == "" ? 36px : 68px;
     border-radius: 4px;
-    background: is_selected ? #333333 : (touch.has-hover ? #2a2a2a : transparent);
+    background: is_disabled ? transparent : (touch.pressed ? #282828 : (touch.has-hover ? #2f2f2f : (is_active ? #2c2c2c : transparent)));
+    border-width: is_active ? 1px : 0px;
+    border-color: #3d3d3d;
 
     HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 10px;
-        spacing: 10px;
-        alignment: start;
+        padding-left: root.label == "" ? 9px : 10px;
+        padding-right: root.label == "" ? 9px : 10px;
+        spacing: 7px;
 
         Text {
             text: root.icon;
+            font-family: "Segoe Fluent Icons";
             font-size: 15px;
             vertical-alignment: center;
+            horizontal-alignment: center;
+            color: is_disabled ? #555555 : root.icon_tint;
+        }
+
+        if root.label != "": Text {
+            text: root.label;
+            font-size: 12px;
+            vertical-alignment: center;
+            color: is_disabled ? #555555 : #e6e6e6;
+        }
+
+        if root.has_dropdown: Text {
+            text: "\u{E70D}";
+            font-family: "Segoe Fluent Icons";
+            font-size: 9px;
+            vertical-alignment: center;
+            color: #999999;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: !root.is_disabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> icon;
+    in property <color> icon_color: #60cdff;
+    in property <string> label;
+    in property <bool> is_selected: false;
+    in property <bool> is_pinned: false;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 4px;
+    background: is_selected ? #2c2c2c : (touch.has-hover ? #242424 : transparent);
+
+    // Windows 11 left accent selection indicator pill
+    if root.is_selected: Rectangle {
+        x: 2px;
+        y: 9px;
+        width: 3px;
+        height: 16px;
+        border-radius: 1.5px;
+        background: #60cdff;
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 12px;
+
+        Text {
+            width: 18px;
+            text: root.icon;
+            font-family: "Segoe Fluent Icons";
+            font-size: 15px;
+            color: root.icon_color;
+            vertical-alignment: center;
+            horizontal-alignment: center;
         }
 
         Text {
+            horizontal-stretch: 1;
             text: root.label;
             font-size: 13px;
             vertical-alignment: center;
-            color: is_selected ? #ffffff : #d0d0d0;
+            horizontal-alignment: left;
+            color: is_selected ? #ffffff : #dcdcdc;
             overflow: elide;
+        }
+
+        if root.is_pinned: Text {
+            width: 14px;
+            text: "\u{E718}";
+            font-family: "Segoe Fluent Icons";
+            font-size: 10px;
+            color: #6e6e6e;
+            vertical-alignment: center;
+            horizontal-alignment: center;
         }
     }
 
@@ -152,748 +259,1313 @@ component NavItem inherits Rectangle {
 }
 
 export component MainWindow inherits Window {
-    title: "Hyperion Explorer";
-    min_width: 1040px;
-    min_height: 640px;
+    title: "File Explorer";
+    no-frame: true;
+    min-width: 1080px;
+    min-height: 680px;
+    preferred-width: 1280px;
+    preferred-height: 780px;
     background: #191919;
-    default-font-family: "Segoe UI Variable Text, Segoe UI, sans-serif";
+    default-font-family: "Segoe UI Variable Text";
+    forward-focus: key_scope;
 
     // State properties
     in-out property <[TabItem]> tabs: [];
     in-out property <int> active_tab_index: 0;
     in-out property <[CrumbItem]> crumbs: [];
     in-out property <string> current_path: "";
+    in-out property <string> current_folder_name: "Home";
+    in-out property <string> active_nav_key: "home";
     in-out property <string> raw_path_text: "";
     in-out property <bool> is_editing_path: false;
     in-out property <string> search_text: "";
-    
+
+    // Inline Rename state
+    in-out property <bool> is_renaming: false;
+    in-out property <string> rename_text: "";
+
     in-out property <bool> can_go_back: false;
     in-out property <bool> can_go_forward: false;
-    
+
     in-out property <[DriveItem]> drives: [];
     in-out property <[EntryItem]> entries: [];
     in-out property <int> selected_index: -1;
     in-out property <string> selected_path: "";
-    
-    in-out property <string> view_mode: "details"; // "details" or "icons"
+
+    in-out property <string> view_mode: "details";
     in-out property <string> sort_column: "name";
     in-out property <bool> sort_asc: true;
-    
+
     in-out property <bool> show_preview: false;
     in-out property <bool> show_details: false;
-    
+
     // Preview state
-    in-out property <string> preview_type: "none"; // "text", "table", "image", "archive", "none"
+    in-out property <string> preview_type: "none";
     in-out property <string> preview_title: "";
     in-out property <string> preview_subtitle: "";
     in-out property <string> preview_text_content: "";
     in-out property <[string]> preview_table_headers: [];
     in-out property <[PreviewRow]> preview_table_rows: [];
-    
+
     // Details pane state
     in-out property <[PropertyItem]> item_properties: [];
 
     // Status bar state
     in-out property <string> status_item_count: "0 items";
     in-out property <string> status_selection_info: "";
-    
-    // Callbacks to Rust backend
+
+    // Window management callbacks (frameless custom titlebar)
+    callback window_minimize();
+    callback window_maximize();
+    callback window_close();
+    callback window_drag();
+
+    // Tab callbacks
     callback tab_selected(int);
     callback tab_closed(int);
     callback tab_new();
-    
+
+    // Navigation callbacks
     callback nav_back();
     callback nav_forward();
     callback nav_up();
     callback nav_refresh();
     callback nav_to_path(string);
     callback search_changed(string);
-    
+
+    // Item interaction callbacks
     callback item_clicked(int);
     callback item_double_clicked(int);
     callback item_right_clicked(int);
-    
+
+    // Command bar callbacks
     callback command_new_folder();
     callback command_cut();
     callback command_copy();
     callback command_paste();
     callback command_rename();
+    callback command_commit_rename(string);
     callback command_delete();
     callback command_toggle_view();
     callback command_toggle_preview();
     callback command_toggle_details();
     callback sort_by(string);
 
-    VerticalLayout {
-        padding: 0;
-        spacing: 0;
+    // Keyboard shortcut callback
+    callback key_shortcut(string);
 
-        // 1. TABS HEADER ROW
+    key_scope := FocusScope {
+        width: 100%;
+        height: 100%;
+
+        key-pressed(event) => {
+            if event.modifiers.control {
+                if event.text == "t" || event.text == "T" {
+                    root.tab_new();
+                    return accept;
+                }
+                if event.text == "w" || event.text == "W" {
+                    root.tab_closed(root.active_tab_index);
+                    return accept;
+                }
+                if event.text == "l" || event.text == "L" {
+                    root.raw_path_text = root.current_path;
+                    root.is_editing_path = true;
+                    return accept;
+                }
+                if event.text == "f" || event.text == "F" {
+                    search_input.focus();
+                    return accept;
+                }
+                if event.text == "c" || event.text == "C" {
+                    root.command_copy();
+                    return accept;
+                }
+                if event.text == "x" || event.text == "X" {
+                    root.command_cut();
+                    return accept;
+                }
+                if event.text == "v" || event.text == "V" {
+                    root.command_paste();
+                    return accept;
+                }
+                if event.text == "r" || event.text == "R" {
+                    root.nav_refresh();
+                    return accept;
+                }
+                if event.text == "n" || event.text == "N" {
+                    root.command_new_folder();
+                    return accept;
+                }
+            }
+            if event.modifiers.alt {
+                if event.text == Key.LeftArrow {
+                    root.nav_back();
+                    return accept;
+                }
+                if event.text == Key.RightArrow {
+                    root.nav_forward();
+                    return accept;
+                }
+                if event.text == Key.UpArrow {
+                    root.nav_up();
+                    return accept;
+                }
+                if event.text == "p" || event.text == "P" {
+                    root.command_toggle_preview();
+                    return accept;
+                }
+                if event.text == "d" || event.text == "D" {
+                    root.raw_path_text = root.current_path;
+                    root.is_editing_path = true;
+                    return accept;
+                }
+            }
+            if event.text == Key.F5 {
+                root.nav_refresh();
+                return accept;
+            }
+            if event.text == Key.F2 {
+                root.command_rename();
+                return accept;
+            }
+            if event.text == Key.Delete {
+                root.command_delete();
+                return accept;
+            }
+            if event.text == Key.Backspace && !root.is_editing_path && !root.is_renaming {
+                root.nav_up();
+                return accept;
+            }
+            if event.text == Key.Return && !root.is_editing_path && !root.is_renaming {
+                if root.selected_index >= 0 {
+                    root.item_double_clicked(root.selected_index);
+                }
+                return accept;
+            }
+            if event.text == Key.UpArrow && !root.is_editing_path && !root.is_renaming {
+                root.key_shortcut("up");
+                return accept;
+            }
+            if event.text == Key.DownArrow && !root.is_editing_path && !root.is_renaming {
+                root.key_shortcut("down");
+                return accept;
+            }
+            if event.text == Key.Escape {
+                if root.is_editing_path {
+                    root.is_editing_path = false;
+                } else if root.is_renaming {
+                    root.is_renaming = false;
+                } else if root.search_text != "" {
+                    root.search_text = "";
+                    root.search_changed("");
+                }
+                return accept;
+            }
+            return reject;
+        }
+
+        // Outer Window Border Frame
         Rectangle {
-            height: 40px;
-            background: #202020;
+            width: 100%;
+            height: 100%;
+            background: #191919;
+            border-width: 1px;
+            border-color: #303030;
 
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                padding-top: 6px;
-                spacing: 4px;
-                alignment: start;
+            VerticalLayout {
+                padding: 1px;
+                spacing: 0px;
 
-                for tab[idx] in root.tabs: Rectangle {
-                    height: 34px;
-                    min_width: 140px;
-                    max_width: 200px;
-                    border-radius: 6px;
-                    background: tab.is_active ? #2c2c2c : (tab_touch.has-hover ? #252525 : transparent);
+                // =========================================================
+                // 1. UNIFIED WINDOWS 11 TITLEBAR & TAB STRIP (NO TOP BORDER)
+                // =========================================================
+                Rectangle {
+                    height: 40px;
+                    background: #141414;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 0px;
+                        padding-top: 0px;
+                        padding-bottom: 0px;
+                        spacing: 0px;
+
+                        // Tabs Area (aligned to bottom of the 40px titlebar so active tab blends into row 2)
+                        HorizontalLayout {
+                            padding-top: 8px;
+                            spacing: 2px;
+
+                            for tab[idx] in root.tabs: Rectangle {
+                                width: 190px;
+                                height: 32px;
+                                border-top-left-radius: 7px;
+                                border-top-right-radius: 7px;
+                                background: tab.is_active ? #262626 : (tab_touch.has-hover ? #1f1f1f : transparent);
+
+                                HorizontalLayout {
+                                    padding-left: 12px;
+                                    padding-right: 6px;
+                                    padding-top: 4px;
+                                    padding-bottom: 4px;
+                                    spacing: 8px;
+
+                                    FluentEntryIcon {
+                                        y: (parent.height - self.height) / 2;
+                                        is_dir: true;
+                                        large: false;
+                                    }
+
+                                    Text {
+                                        horizontal-stretch: 1;
+                                        text: tab.title;
+                                        font-size: 12px;
+                                        font-weight: tab.is_active ? 600 : 400;
+                                        color: tab.is_active ? #ffffff : #b0b0b0;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: left;
+                                        overflow: elide;
+                                    }
+
+                                    // Tab Close Button
+                                    Rectangle {
+                                        width: 22px;
+                                        height: 22px;
+                                        y: (parent.height - self.height) / 2;
+                                        border-radius: 4px;
+                                        background: close_touch.has-hover ? #383838 : transparent;
+
+                                        Text {
+                                            text: "\u{E8BB}";
+                                            font-family: "Segoe Fluent Icons";
+                                            font-size: 9px;
+                                            color: close_touch.has-hover ? #ffffff : #9a9a9a;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+
+                                        close_touch := TouchArea {
+                                            clicked => { root.tab_closed(idx); }
+                                        }
+                                    }
+                                }
+
+                                tab_touch := TouchArea {
+                                    width: parent.width - 28px;
+                                    height: parent.height;
+                                    clicked => { root.tab_selected(idx); }
+                                }
+                            }
+
+                            // New Tab (+) Button next to tabs
+                            Rectangle {
+                                width: 32px;
+                                height: 28px;
+                                y: 2px;
+                                border-radius: 5px;
+                                background: new_tab_touch.has-hover ? #252525 : transparent;
+
+                                Text {
+                                    text: "\u{E710}";
+                                    font-family: "Segoe Fluent Icons";
+                                    font-size: 11px;
+                                    color: new_tab_touch.has-hover ? #ffffff : #b0b0b0;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+
+                                new_tab_touch := TouchArea {
+                                    clicked => { root.tab_new(); }
+                                }
+                            }
+                        }
+
+                        // Draggable Titlebar Region
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            height: 40px;
+                            background: transparent;
+
+                            TouchArea {
+                                double-clicked => { root.window_maximize(); }
+                                pointer-event(pe) => {
+                                    if pe.button == PointerEventButton.left && pe.kind == PointerEventKind.down {
+                                        root.window_drag();
+                                    }
+                                }
+                            }
+                        }
+
+                        // Top-Right Windows 11 Caption Controls (Minimize, Maximize, Close)
+                        HorizontalLayout {
+                            spacing: 0px;
+                            padding-bottom: 8px;
+
+                            CaptionButton {
+                                icon: "\u{E921}";
+                                clicked => { root.window_minimize(); }
+                            }
+
+                            CaptionButton {
+                                icon: "\u{E922}";
+                                clicked => { root.window_maximize(); }
+                            }
+
+                            CaptionButton {
+                                icon: "\u{E8BB}";
+                                is_close: true;
+                                clicked => { root.window_close(); }
+                            }
+                        }
+                    }
+                }
+
+                // =========================================================
+                // 2. NAVIGATION & BREADCRUMB ADDRESS BAR ROW
+                // =========================================================
+                Rectangle {
+                    height: 46px;
+                    background: #262626;
 
                     HorizontalLayout {
                         padding-left: 10px;
-                        padding-right: 6px;
-                        spacing: 8px;
-                        alignment: center;
+                        padding-right: 12px;
+                        padding-top: 7px;
+                        padding-bottom: 7px;
+                        spacing: 6px;
 
-                        Text {
-                            text: "📁";
-                            font-size: 13px;
-                            vertical-alignment: center;
+                        FluentIconButton {
+                            icon: "\u{E72B}";
+                            is_disabled: !root.can_go_back;
+                            clicked => { root.nav_back(); }
                         }
 
-                        Text {
-                            text: tab.title;
-                            font-size: 12px;
-                            color: tab.is_active ? #ffffff : #aaaaaa;
-                            vertical-alignment: center;
-                            overflow: elide;
+                        FluentIconButton {
+                            icon: "\u{E72A}";
+                            is_disabled: !root.can_go_forward;
+                            clicked => { root.nav_forward(); }
+                        }
+
+                        FluentIconButton {
+                            icon: "\u{E74A}";
+                            clicked => { root.nav_up(); }
+                        }
+
+                        FluentIconButton {
+                            icon: "\u{E72C}";
+                            clicked => { root.nav_refresh(); }
+                        }
+
+                        // Breadcrumb / Address Bar
+                        Rectangle {
                             horizontal-stretch: 1;
+                            height: 32px;
+                            border-radius: 4px;
+                            background: #1d1d1d;
+                            border-width: 1px;
+                            border-color: root.is_editing_path ? #60cdff : #383838;
+
+                            if !root.is_editing_path: HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                padding-top: 3px;
+                                padding-bottom: 3px;
+                                spacing: 2px;
+
+                                // Computer / Root glyph
+                                Text {
+                                    width: 20px;
+                                    text: "\u{EC4E}";
+                                    font-family: "Segoe Fluent Icons";
+                                    font-size: 13px;
+                                    color: #bbbbbb;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+
+                                Text {
+                                    width: 14px;
+                                    text: "\u{E76C}";
+                                    font-family: "Segoe Fluent Icons";
+                                    font-size: 9px;
+                                    color: #777777;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+
+                                for crumb[c_idx] in root.crumbs: HorizontalLayout {
+                                    spacing: 2px;
+
+                                    Rectangle {
+                                        height: 24px;
+                                        border-radius: 3px;
+                                        background: crumb_touch.has-hover ? #2e2e2e : transparent;
+
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+
+                                            Text {
+                                                text: crumb.label;
+                                                font-size: 12px;
+                                                color: crumb_touch.has-hover ? #ffffff : #dedede;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        crumb_touch := TouchArea {
+                                            clicked => { root.nav_to_path(crumb.path); }
+                                        }
+                                    }
+
+                                    Text {
+                                        width: 14px;
+                                        text: "\u{E76C}";
+                                        font-family: "Segoe Fluent Icons";
+                                        font-size: 9px;
+                                        color: #777777;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: center;
+                                    }
+                                }
+
+                                // Trailing empty space in address bar: click to edit raw path
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    background: transparent;
+                                    TouchArea {
+                                        clicked => {
+                                            root.raw_path_text = root.current_path;
+                                            root.is_editing_path = true;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if root.is_editing_path: HorizontalLayout {
+                                padding-left: 6px;
+                                padding-right: 6px;
+
+                                LineEdit {
+                                    horizontal-stretch: 1;
+                                    text <=> root.raw_path_text;
+                                    accepted(text) => {
+                                        root.is_editing_path = false;
+                                        root.nav_to_path(text);
+                                        key_scope.focus();
+                                    }
+                                }
+
+                                FluentIconButton {
+                                    width: 26px;
+                                    height: 26px;
+                                    icon: "\u{E8BB}";
+                                    clicked => {
+                                        root.is_editing_path = false;
+                                        key_scope.focus();
+                                    }
+                                }
+                            }
+                        }
+
+                        // Windows 11 Search Box
+                        Rectangle {
+                            width: 270px;
+                            height: 32px;
+                            border-radius: 4px;
+                            background: #1d1d1d;
+                            border-width: 1px;
+                            border-color: #383838;
+
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 6px;
+
+                                search_input := LineEdit {
+                                    horizontal-stretch: 1;
+                                    placeholder-text: "Search " + root.current_folder_name;
+                                    text <=> root.search_text;
+                                    edited(text) => {
+                                        root.search_changed(text);
+                                    }
+                                    accepted(text) => {
+                                        root.search_changed(text);
+                                    }
+                                }
+
+                                if root.search_text != "": Rectangle {
+                                    width: 22px;
+                                    height: 22px;
+                                    y: (parent.height - self.height) / 2;
+                                    border-radius: 4px;
+                                    background: clear_search_touch.has-hover ? #333333 : transparent;
+
+                                    Text {
+                                        text: "\u{E8BB}";
+                                        font-family: "Segoe Fluent Icons";
+                                        font-size: 9px;
+                                        color: #bbbbbb;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+
+                                    clear_search_touch := TouchArea {
+                                        clicked => {
+                                            root.search_text = "";
+                                            root.search_changed("");
+                                            key_scope.focus();
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: 18px;
+                                    text: "\u{E721}";
+                                    font-family: "Segoe Fluent Icons";
+                                    font-size: 12px;
+                                    color: #999999;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Subtle separator between Navigation Row and Command Bar
+                Rectangle { height: 1px; background: #2d2d2d; }
+
+                // =========================================================
+                // 3. WINDOWS 11 COMMAND BAR
+                // =========================================================
+                Rectangle {
+                    height: 44px;
+                    background: #202020;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 12px;
+                        padding-top: 5px;
+                        padding-bottom: 5px;
+                        spacing: 4px;
+
+                        CommandBarButton {
+                            icon: "\u{E710}";
+                            icon_tint: #60cdff;
+                            label: "New";
+                            has_dropdown: true;
+                            clicked => { root.command_new_folder(); }
                         }
 
                         Rectangle {
-                            width: 20px;
+                            width: 1px;
                             height: 20px;
-                            border-radius: 4px;
-                            background: close_touch.has-hover ? #444444 : transparent;
-
-                            Text {
-                                text: "✕";
-                                font-size: 10px;
-                                color: close_touch.has-hover ? #ffffff : #888888;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-
-                            close_touch := TouchArea {
-                                clicked => { root.tab_closed(idx); }
-                            }
-                        }
-                    }
-
-                    tab_touch := TouchArea {
-                        clicked => { root.tab_selected(idx); }
-                    }
-                }
-
-                // New Tab Button (+)
-                Rectangle {
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 6px;
-                    background: new_tab_touch.has-hover ? #2c2c2c : transparent;
-
-                    Text {
-                        text: "＋";
-                        font-size: 14px;
-                        color: new_tab_touch.has-hover ? #ffffff : #aaaaaa;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-
-                    new_tab_touch := TouchArea {
-                        clicked => { root.tab_new(); }
-                    }
-                }
-            }
-        }
-
-        // 2. NAVIGATION ROW (Back, Forward, Up, Refresh, Breadcrumbs, Search)
-        Rectangle {
-            height: 44px;
-            background: #252525;
-
-            HorizontalLayout {
-                padding-left: 10px;
-                padding-right: 12px;
-                spacing: 6px;
-                alignment: center;
-
-                IconButton {
-                    text: "←";
-                    is_disabled: !root.can_go_back;
-                    clicked => { root.nav_back(); }
-                }
-
-                IconButton {
-                    text: "→";
-                    is_disabled: !root.can_go_forward;
-                    clicked => { root.nav_forward(); }
-                }
-
-                IconButton {
-                    text: "↑";
-                    clicked => { root.nav_up(); }
-                }
-
-                IconButton {
-                    text: "↻";
-                    clicked => { root.nav_refresh(); }
-                }
-
-                // Breadcrumb Address Bar
-                Rectangle {
-                    horizontal-stretch: 1;
-                    height: 32px;
-                    border-radius: 4px;
-                    background: #1c1c1c;
-                    border-width: 1px;
-                    border-color: #383838;
-
-                    if !root.is_editing_path: HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 4px;
-                        alignment: start;
-
-                        Text {
-                            text: "💻";
-                            font-size: 13px;
-                            vertical-alignment: center;
+                            y: 7px;
+                            background: #343434;
                         }
 
-                        for crumb[c_idx] in root.crumbs: HorizontalLayout {
-                            spacing: 4px;
-                            alignment: center;
+                        CommandBarButton {
+                            icon: "\u{E8C6}";
+                            is_disabled: root.selected_index < 0;
+                            clicked => { root.command_cut(); }
+                        }
 
-                            Rectangle {
-                                border-radius: 3px;
-                                background: crumb_touch.has-hover ? #2f2f2f : transparent;
-                                height: 26px;
+                        CommandBarButton {
+                            icon: "\u{E8C8}";
+                            is_disabled: root.selected_index < 0;
+                            clicked => { root.command_copy(); }
+                        }
 
-                                HorizontalLayout {
-                                    padding-left: 6px;
-                                    padding-right: 6px;
-                                    alignment: center;
+                        CommandBarButton {
+                            icon: "\u{E77F}";
+                            clicked => { root.command_paste(); }
+                        }
 
-                                    Text {
-                                        text: crumb.label;
-                                        font-size: 12px;
-                                        color: crumb_touch.has-hover ? #ffffff : #d0d0d0;
-                                        vertical-alignment: center;
-                                    }
-                                }
+                        CommandBarButton {
+                            icon: "\u{E8AC}";
+                            is_disabled: root.selected_index < 0;
+                            clicked => { root.command_rename(); }
+                        }
 
-                                crumb_touch := TouchArea {
-                                    clicked => { root.nav_to_path(crumb.path); }
-                                }
-                            }
+                        CommandBarButton {
+                            icon: "\u{E74D}";
+                            is_disabled: root.selected_index < 0;
+                            clicked => { root.command_delete(); }
+                        }
+
+                        Rectangle {
+                            width: 1px;
+                            height: 20px;
+                            y: 7px;
+                            background: #343434;
+                        }
+
+                        CommandBarButton {
+                            icon: "\u{E8CB}";
+                            label: "Sort";
+                            has_dropdown: true;
+                            clicked => { root.sort_by(root.sort_column); }
+                        }
+
+                        CommandBarButton {
+                            icon: root.view_mode == "details" ? "\u{E8FD}" : "\u{E8A9}";
+                            label: "View";
+                            has_dropdown: true;
+                            clicked => { root.command_toggle_view(); }
+                        }
+
+                        // Inline Rename Input Bar (appears when F2 or Rename is clicked)
+                        if root.is_renaming: HorizontalLayout {
+                            spacing: 6px;
+                            padding-left: 8px;
 
                             Text {
-                                text: "›";
+                                text: "Rename to:";
                                 font-size: 12px;
-                                color: #666666;
-                                vertical-alignment: center;
-                            }
-                        }
-                    }
-
-                    if root.is_editing_path: LineEdit {
-                        text <=> root.raw_path_text;
-                        accepted(text) => {
-                            root.is_editing_path = false;
-                            root.nav_to_path(text);
-                        }
-                    }
-
-                    // Click area on empty space to switch into path edit mode
-                    if !root.is_editing_path: TouchArea {
-                        clicked => {
-                            root.raw_path_text = root.current_path;
-                            root.is_editing_path = true;
-                        }
-                    }
-                }
-
-                // Instant Search Box
-                Rectangle {
-                    width: 240px;
-                    height: 32px;
-                    border-radius: 4px;
-                    background: #1c1c1c;
-                    border-width: 1px;
-                    border-color: #383838;
-
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        spacing: 6px;
-                        alignment: center;
-
-                        Text {
-                            text: "🔍";
-                            font-size: 12px;
-                            color: #888888;
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            horizontal-stretch: 1;
-                            placeholder-text: "Search (instant MFT)...";
-                            text <=> root.search_text;
-                            edited(text) => {
-                                root.search_changed(text);
-                            }
-                        }
-
-                        if root.search_text != "": Rectangle {
-                            width: 18px;
-                            height: 18px;
-                            border-radius: 9px;
-                            background: clear_search_touch.has-hover ? #444444 : transparent;
-
-                            Text {
-                                text: "✕";
-                                font-size: 10px;
-                                color: #aaaaaa;
-                                horizontal-alignment: center;
+                                color: #60cdff;
                                 vertical-alignment: center;
                             }
 
-                            clear_search_touch := TouchArea {
+                            LineEdit {
+                                width: 200px;
+                                text <=> root.rename_text;
+                                accepted(new_name) => {
+                                    root.is_renaming = false;
+                                    root.command_commit_rename(new_name);
+                                    key_scope.focus();
+                                }
+                            }
+
+                            CommandBarButton {
+                                icon: "\u{E73E}";
+                                icon_tint: #60cdff;
+                                label: "Save";
                                 clicked => {
-                                    root.search_text = "";
-                                    root.search_changed("");
+                                    root.is_renaming = false;
+                                    root.command_commit_rename(root.rename_text);
+                                    key_scope.focus();
+                                }
+                            }
+
+                            CommandBarButton {
+                                icon: "\u{E8BB}";
+                                clicked => {
+                                    root.is_renaming = false;
+                                    key_scope.focus();
                                 }
                             }
                         }
+
+                        // Flexible middle spacer pushing Details/Preview to the right
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            background: transparent;
+                        }
+
+                        CommandBarButton {
+                            icon: "\u{E946}";
+                            label: "Details";
+                            is_active: root.show_details;
+                            clicked => { root.command_toggle_details(); }
+                        }
+
+                        CommandBarButton {
+                            icon: "\u{E890}";
+                            label: "Preview";
+                            is_active: root.show_preview;
+                            clicked => { root.command_toggle_preview(); }
+                        }
                     }
                 }
-            }
-        }
 
-        // 3. COMMAND BAR (New, Cut, Copy, Paste, Rename, Delete, Sort, View, Details, Preview)
-        Rectangle {
-            height: 42px;
-            background: #252525;
+                // Separator below Command Bar
+                Rectangle { height: 1px; background: #2d2d2d; }
 
-            HorizontalLayout {
-                padding-left: 10px;
-                padding-right: 12px;
-                spacing: 4px;
-                alignment: center;
+                // =========================================================
+                // 4. MAIN WORKSPACE (Sidebar + Folder View + Preview/Details)
+                // =========================================================
+                HorizontalLayout {
+                    vertical-stretch: 1;
+                    spacing: 0px;
 
-                CommandBarButton {
-                    icon: "＋";
-                    label: "New";
-                    has_dropdown: true;
-                    clicked => { root.command_new_folder(); }
-                }
+                    // Left Navigation Sidebar
+                    Rectangle {
+                        width: 230px;
+                        background: #191919;
 
-                Rectangle { width: 1px; height: 20px; background: #383838; }
-
-                CommandBarButton {
-                    icon: "✂";
-                    clicked => { root.command_cut(); }
-                }
-
-                CommandBarButton {
-                    icon: "📋";
-                    clicked => { root.command_copy(); }
-                }
-
-                CommandBarButton {
-                    icon: "📄";
-                    clicked => { root.command_paste(); }
-                }
-
-                CommandBarButton {
-                    icon: "🏷";
-                    clicked => { root.command_rename(); }
-                }
-
-                CommandBarButton {
-                    icon: "🗑";
-                    clicked => { root.command_delete(); }
-                }
-
-                Rectangle { width: 1px; height: 20px; background: #383838; }
-
-                CommandBarButton {
-                    icon: "⇅";
-                    label: "Sort";
-                    has_dropdown: true;
-                    clicked => { root.sort_by(root.sort_column); }
-                }
-
-                CommandBarButton {
-                    icon: root.view_mode == "details" ? "☰" : "☷";
-                    label: root.view_mode == "details" ? "Details" : "Icons";
-                    clicked => { root.command_toggle_view(); }
-                }
-
-                Rectangle { horizontal-stretch: 1; }
-
-                CommandBarButton {
-                    icon: "ℹ";
-                    label: "Details";
-                    is_active: root.show_details;
-                    clicked => { root.command_toggle_details(); }
-                }
-
-                CommandBarButton {
-                    icon: "👁";
-                    label: "Preview";
-                    is_active: root.show_preview;
-                    clicked => { root.command_toggle_preview(); }
-                }
-            }
-        }
-
-        // 4. MAIN WORKSPACE (Navigation Pane + Content View + Preview/Details Pane)
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: 0;
-
-            // Navigation Pane (Sidebar)
-            Rectangle {
-                width: 220px;
-                background: #1f1f1f;
-
-                ScrollView {
-                    VerticalLayout {
-                        padding-left: 8px;
-                        padding-right: 8px;
-                        padding-top: 10px;
-                        spacing: 2px;
-                        alignment: start;
-
-                        // Quick Access Header
-                        Text {
-                            text: "Quick access";
-                            font-size: 11px;
-                            font-weight: 600;
-                            color: #888888;
-                        }
-
-                        NavItem { icon: "🏠"; label: "Home"; clicked => { root.nav_to_path("home"); } }
-                        NavItem { icon: "🖥️"; label: "Desktop"; clicked => { root.nav_to_path("desktop"); } }
-                        NavItem { icon: "⬇️"; label: "Downloads"; clicked => { root.nav_to_path("downloads"); } }
-                        NavItem { icon: "📄"; label: "Documents"; clicked => { root.nav_to_path("documents"); } }
-                        NavItem { icon: "🖼️"; label: "Pictures"; clicked => { root.nav_to_path("pictures"); } }
-                        NavItem { icon: "🎵"; label: "Music"; clicked => { root.nav_to_path("music"); } }
-                        NavItem { icon: "🎬"; label: "Videos"; clicked => { root.nav_to_path("videos"); } }
-
-                        Rectangle { height: 10px; }
-
-                        // This PC Header
-                        Text {
-                            text: "This PC";
-                            font-size: 11px;
-                            font-weight: 600;
-                            color: #888888;
-                        }
-
-                        for drive in root.drives: Rectangle {
-                            height: 52px;
-                            border-radius: 4px;
-                            background: drive_touch.has-hover ? #2a2a2a : transparent;
-
+                        ScrollView {
                             VerticalLayout {
                                 padding-left: 8px;
                                 padding-right: 8px;
-                                padding-top: 6px;
-                                spacing: 4px;
+                                padding-top: 8px;
+                                padding-bottom: 12px;
+                                spacing: 2px;
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    alignment: center;
-
-                                    Text {
-                                        text: "💽";
-                                        font-size: 16px;
-                                        vertical-alignment: center;
-                                    }
-
-                                    VerticalLayout {
-                                        spacing: 1px;
-                                        horizontal-stretch: 1;
-
-                                        Text {
-                                            text: drive.name + " (" + drive.letter + ")";
-                                            font-size: 12px;
-                                            font-weight: 500;
-                                            color: #e0e0e0;
-                                            overflow: elide;
-                                        }
-
-                                        Text {
-                                            text: drive.free_str + " free of " + drive.total_str;
-                                            font-size: 10px;
-                                            color: #888888;
-                                            overflow: elide;
-                                        }
-                                    }
+                                NavItem {
+                                    icon: "\u{E80F}";
+                                    icon_color: #60cdff;
+                                    label: "Home";
+                                    is_selected: root.active_nav_key == "home";
+                                    clicked => { root.nav_to_path("home"); }
                                 }
 
-                                // Storage Bar
+                                NavItem {
+                                    icon: "\u{EB9F}";
+                                    icon_color: #c58af9;
+                                    label: "Gallery";
+                                    is_selected: root.active_nav_key == "pictures";
+                                    clicked => { root.nav_to_path("pictures"); }
+                                }
+
                                 Rectangle {
-                                    height: 4px;
-                                    border-radius: 2px;
-                                    background: #383838;
-
+                                    height: 9px;
                                     Rectangle {
-                                        x: 0;
-                                        width: parent.width * drive.percent_used;
-                                        height: parent.height;
-                                        border-radius: 2px;
-                                        background: drive.percent_used > 0.9 ? #e81123 : #0078d4;
+                                        x: 8px;
+                                        y: 4px;
+                                        width: parent.width - 16px;
+                                        height: 1px;
+                                        background: #2b2b2b;
                                     }
                                 }
-                            }
 
-                            drive_touch := TouchArea {
-                                clicked => { root.nav_to_path(drive.letter); }
-                            }
-                        }
-                    }
-                }
-            }
+                                NavItem {
+                                    icon: "\u{E8FC}";
+                                    icon_color: #4cc2ff;
+                                    label: "Desktop";
+                                    is_pinned: true;
+                                    is_selected: root.active_nav_key == "desktop";
+                                    clicked => { root.nav_to_path("desktop"); }
+                                }
 
-            // Main Content Area (Details View or Icons View)
-            Rectangle {
-                horizontal-stretch: 1;
-                background: #191919;
+                                NavItem {
+                                    icon: "\u{E896}";
+                                    icon_color: #28c76f;
+                                    label: "Downloads";
+                                    is_pinned: true;
+                                    is_selected: root.active_nav_key == "downloads";
+                                    clicked => { root.nav_to_path("downloads"); }
+                                }
 
-                VerticalLayout {
-                    spacing: 0;
+                                NavItem {
+                                    icon: "\u{E8A5}";
+                                    icon_color: #b4a0ff;
+                                    label: "Documents";
+                                    is_pinned: true;
+                                    is_selected: root.active_nav_key == "documents";
+                                    clicked => { root.nav_to_path("documents"); }
+                                }
 
-                    // Table Column Headers (Details View only)
-                    if root.view_mode == "details": Rectangle {
-                        height: 32px;
-                        background: #202020;
+                                NavItem {
+                                    icon: "\u{EB9F}";
+                                    icon_color: #ff9f43;
+                                    label: "Pictures";
+                                    is_pinned: true;
+                                    is_selected: root.active_nav_key == "pictures_folder";
+                                    clicked => { root.nav_to_path("pictures"); }
+                                }
 
-                        HorizontalLayout {
-                            padding-left: 16px;
-                            padding-right: 16px;
-                            spacing: 12px;
-                            alignment: center;
+                                NavItem {
+                                    icon: "\u{E8D6}";
+                                    icon_color: #ff6b8b;
+                                    label: "Music";
+                                    is_pinned: true;
+                                    is_selected: root.active_nav_key == "music";
+                                    clicked => { root.nav_to_path("music"); }
+                                }
 
-                            // Name Column
-                            Rectangle {
-                                horizontal-stretch: 3;
-                                height: 30px;
+                                NavItem {
+                                    icon: "\u{E8B2}";
+                                    icon_color: #00cfe8;
+                                    label: "Videos";
+                                    is_pinned: true;
+                                    is_selected: root.active_nav_key == "videos";
+                                    clicked => { root.nav_to_path("videos"); }
+                                }
+
+                                Rectangle {
+                                    height: 11px;
+                                    Rectangle {
+                                        x: 8px;
+                                        y: 5px;
+                                        width: parent.width - 16px;
+                                        height: 1px;
+                                        background: #2b2b2b;
+                                    }
+                                }
+
+                                // This PC Section Header
                                 HorizontalLayout {
-                                    spacing: 4px;
+                                    height: 28px;
+                                    padding-left: 10px;
+                                    spacing: 8px;
+
                                     Text {
-                                        text: "Name " + (root.sort_column == "name" ? (root.sort_asc ? "↑" : "↓") : "");
-                                        font-size: 12px;
-                                        font-weight: 500;
-                                        color: root.sort_column == "name" ? #ffffff : #a0a0a0;
+                                        width: 16px;
+                                        text: "\u{EC4E}";
+                                        font-family: "Segoe Fluent Icons";
+                                        font-size: 13px;
+                                        color: #a0a0a0;
                                         vertical-alignment: center;
                                     }
-                                }
-                                TouchArea { clicked => { root.sort_by("name"); } }
-                            }
 
-                            // Date modified Column
-                            Rectangle {
-                                horizontal-stretch: 1;
-                                height: 30px;
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: "Date modified " + (root.sort_column == "date" ? (root.sort_asc ? "↑" : "↓") : "");
-                                        font-size: 12px;
-                                        font-weight: 500;
-                                        color: root.sort_column == "date" ? #ffffff : #a0a0a0;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                                TouchArea { clicked => { root.sort_by("date"); } }
-                            }
-
-                            // Type Column
-                            Rectangle {
-                                horizontal-stretch: 1;
-                                height: 30px;
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: "Type " + (root.sort_column == "type" ? (root.sort_asc ? "↑" : "↓") : "");
-                                        font-size: 12px;
-                                        font-weight: 500;
-                                        color: root.sort_column == "type" ? #ffffff : #a0a0a0;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                                TouchArea { clicked => { root.sort_by("type"); } }
-                            }
-
-                            // Size Column
-                            Rectangle {
-                                width: 90px;
-                                height: 30px;
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: "Size " + (root.sort_column == "size" ? (root.sort_asc ? "↑" : "↓") : "");
-                                        font-size: 12px;
-                                        font-weight: 500;
-                                        color: root.sort_column == "size" ? #ffffff : #a0a0a0;
-                                        vertical-alignment: center;
-                                        horizontal-alignment: right;
-                                    }
-                                }
-                                TouchArea { clicked => { root.sort_by("size"); } }
-                            }
-                        }
-                    }
-
-                    // Content List (Details View)
-                    if root.view_mode == "details": ScrollView {
-                        VerticalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            padding-top: 4px;
-                            padding-bottom: 4px;
-                            spacing: 1px;
-                            alignment: start;
-
-                            for entry[e_idx] in root.entries: Rectangle {
-                                height: 34px;
-                                border-radius: 4px;
-                                background: root.selected_index == e_idx ? #2d3848 : (row_touch.has-hover ? #252525 : transparent);
-                                border-width: root.selected_index == e_idx ? 1px : 0px;
-                                border-color: #0078d4;
-
-                                HorizontalLayout {
-                                    padding-left: 8px;
-                                    padding-right: 8px;
-                                    spacing: 12px;
-                                    alignment: center;
-
-                                    // Name + Icon
-                                    HorizontalLayout {
-                                        horizontal-stretch: 3;
-                                        spacing: 8px;
-                                        alignment: center;
-
-                                        Text {
-                                            text: entry.icon_glyph;
-                                            font-size: 16px;
-                                            color: entry.icon_color;
-                                            vertical-alignment: center;
-                                        }
-
-                                        Text {
-                                            text: entry.name;
-                                            font-size: 13px;
-                                            color: root.selected_index == e_idx ? #ffffff : #e0e0e0;
-                                            vertical-alignment: center;
-                                            overflow: elide;
-                                            horizontal-stretch: 1;
-                                        }
-                                    }
-
-                                    // Date modified
                                     Text {
                                         horizontal-stretch: 1;
-                                        text: entry.mtime_str;
+                                        text: "This PC";
                                         font-size: 12px;
-                                        color: #909090;
+                                        font-weight: 600;
+                                        color: #b0b0b0;
                                         vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-
-                                    // Type
-                                    Text {
-                                        horizontal-stretch: 1;
-                                        text: entry.type_str;
-                                        font-size: 12px;
-                                        color: #909090;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-
-                                    // Size
-                                    Text {
-                                        width: 90px;
-                                        text: entry.size_str;
-                                        font-size: 12px;
-                                        color: #909090;
-                                        vertical-alignment: center;
-                                        horizontal-alignment: right;
-                                        overflow: elide;
                                     }
                                 }
 
-                                row_touch := TouchArea {
-                                    clicked => { root.item_clicked(e_idx); }
-                                    double-clicked => { root.item_double_clicked(e_idx); }
-                                    pointer-event(pe) => {
-                                        if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
-                                            root.item_right_clicked(e_idx);
-                                        }
+                                for drive in root.drives: Rectangle {
+                                    height: 52px;
+                                    border-radius: 4px;
+                                    background: root.current_path == drive.letter ? #2c2c2c : (drive_touch.has-hover ? #242424 : transparent);
+
+                                    if root.current_path == drive.letter: Rectangle {
+                                        x: 2px;
+                                        y: 14px;
+                                        width: 3px;
+                                        height: 24px;
+                                        border-radius: 1.5px;
+                                        background: #60cdff;
                                     }
-                                }
-                            }
-                        }
-                    }
-
-                    // Content Grid (Icons View)
-                    if root.view_mode == "icons": ScrollView {
-                        HorizontalLayout {
-                            padding: 16px;
-                            spacing: 12px;
-                            alignment: start;
-
-                            VerticalLayout {
-                                spacing: 12px;
-
-                                for entry[e_idx] in root.entries: Rectangle {
-                                    width: 100px;
-                                    height: 100px;
-                                    border-radius: 6px;
-                                    background: root.selected_index == e_idx ? #2d3848 : (grid_touch.has-hover ? #252525 : transparent);
-                                    border-width: root.selected_index == e_idx ? 1px : 0px;
-                                    border-color: #0078d4;
 
                                     VerticalLayout {
-                                        padding: 8px;
-                                        spacing: 6px;
-                                        alignment: center;
+                                        padding-left: 12px;
+                                        padding-right: 10px;
+                                        padding-top: 6px;
+                                        padding-bottom: 6px;
+                                        spacing: 4px;
 
-                                        Text {
-                                            text: entry.icon_glyph;
-                                            font-size: 36px;
-                                            color: entry.icon_color;
-                                            horizontal-alignment: center;
+                                        HorizontalLayout {
+                                            spacing: 10px;
+
+                                            Text {
+                                                width: 18px;
+                                                text: "\u{EDA2}";
+                                                font-family: "Segoe Fluent Icons";
+                                                font-size: 16px;
+                                                color: #60cdff;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: center;
+                                            }
+
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                spacing: 1px;
+
+                                                Text {
+                                                    text: drive.name + " (" + drive.letter + ")";
+                                                    font-size: 12px;
+                                                    color: #e6e6e6;
+                                                    horizontal-alignment: left;
+                                                    overflow: elide;
+                                                }
+
+                                                Text {
+                                                    text: drive.free_str + " free of " + drive.total_str;
+                                                    font-size: 10px;
+                                                    color: #888888;
+                                                    horizontal-alignment: left;
+                                                    overflow: elide;
+                                                }
+                                            }
                                         }
 
-                                        Text {
-                                            text: entry.name;
-                                            font-size: 11px;
-                                            color: #e0e0e0;
-                                            horizontal-alignment: center;
-                                            overflow: elide;
-                                            wrap: word-wrap;
+                                        // Drive Storage Bar
+                                        Rectangle {
+                                            height: 4px;
+                                            border-radius: 2px;
+                                            background: #333333;
+
+                                            Rectangle {
+                                                x: 0px;
+                                                width: parent.width * drive.percent_used;
+                                                height: parent.height;
+                                                border-radius: 2px;
+                                                background: drive.percent_used > 0.9 ? #f85149 : #60cdff;
+                                            }
                                         }
                                     }
 
-                                    grid_touch := TouchArea {
-                                        clicked => { root.item_clicked(e_idx); }
-                                        double-clicked => { root.item_double_clicked(e_idx); }
-                                        pointer-event(pe) => {
-                                            if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
-                                                root.item_right_clicked(e_idx);
+                                    drive_touch := TouchArea {
+                                        clicked => { root.nav_to_path(drive.letter); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Vertical Divider between Navigation Pane and Content View
+                    Rectangle { width: 1px; background: #2b2b2b; }
+
+                    // Center Folder Content View
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        background: #191919;
+
+                        VerticalLayout {
+                            spacing: 0px;
+
+                            // Table Column Headers (Details View)
+                            if root.view_mode == "details": Rectangle {
+                                height: 34px;
+                                background: #191919;
+
+                                HorizontalLayout {
+                                    padding-left: 16px;
+                                    padding-right: 20px;
+                                    spacing: 12px;
+
+                                    // Name Header
+                                    Rectangle {
+                                        horizontal-stretch: 4;
+                                        background: name_hdr_touch.has-hover ? #242424 : transparent;
+                                        border-radius: 3px;
+
+                                        HorizontalLayout {
+                                            padding-left: 8px;
+                                            padding-right: 8px;
+                                            spacing: 6px;
+
+                                            Text {
+                                                text: "Name";
+                                                font-size: 12px;
+                                                color: root.sort_column == "name" ? #ffffff : #a6a6a6;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: left;
+                                            }
+
+                                            if root.sort_column == "name": Text {
+                                                text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
+                                                font-family: "Segoe Fluent Icons";
+                                                font-size: 9px;
+                                                color: #60cdff;
+                                                vertical-alignment: center;
+                                            }
+
+                                            Rectangle { horizontal-stretch: 1; }
+                                        }
+
+                                        name_hdr_touch := TouchArea {
+                                            clicked => { root.sort_by("name"); }
+                                        }
+                                    }
+
+                                    Rectangle { width: 1px; height: 16px; y: 9px; background: #2e2e2e; }
+
+                                    // Date modified Header
+                                    Rectangle {
+                                        width: 150px;
+                                        background: date_hdr_touch.has-hover ? #242424 : transparent;
+                                        border-radius: 3px;
+
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            spacing: 6px;
+
+                                            Text {
+                                                text: "Date modified";
+                                                font-size: 12px;
+                                                color: root.sort_column == "date" ? #ffffff : #a6a6a6;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: left;
+                                            }
+
+                                            if root.sort_column == "date": Text {
+                                                text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
+                                                font-family: "Segoe Fluent Icons";
+                                                font-size: 9px;
+                                                color: #60cdff;
+                                                vertical-alignment: center;
+                                            }
+
+                                            Rectangle { horizontal-stretch: 1; }
+                                        }
+
+                                        date_hdr_touch := TouchArea {
+                                            clicked => { root.sort_by("date"); }
+                                        }
+                                    }
+
+                                    Rectangle { width: 1px; height: 16px; y: 9px; background: #2e2e2e; }
+
+                                    // Type Header
+                                    Rectangle {
+                                        width: 170px;
+                                        background: type_hdr_touch.has-hover ? #242424 : transparent;
+                                        border-radius: 3px;
+
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            spacing: 6px;
+
+                                            Text {
+                                                text: "Type";
+                                                font-size: 12px;
+                                                color: root.sort_column == "type" ? #ffffff : #a6a6a6;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: left;
+                                            }
+
+                                            if root.sort_column == "type": Text {
+                                                text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
+                                                font-family: "Segoe Fluent Icons";
+                                                font-size: 9px;
+                                                color: #60cdff;
+                                                vertical-alignment: center;
+                                            }
+
+                                            Rectangle { horizontal-stretch: 1; }
+                                        }
+
+                                        type_hdr_touch := TouchArea {
+                                            clicked => { root.sort_by("type"); }
+                                        }
+                                    }
+
+                                    Rectangle { width: 1px; height: 16px; y: 9px; background: #2e2e2e; }
+
+                                    // Size Header
+                                    Rectangle {
+                                        width: 95px;
+                                        background: size_hdr_touch.has-hover ? #242424 : transparent;
+                                        border-radius: 3px;
+
+                                        HorizontalLayout {
+                                            padding-right: 6px;
+                                            spacing: 6px;
+
+                                            Rectangle { horizontal-stretch: 1; }
+
+                                            if root.sort_column == "size": Text {
+                                                text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
+                                                font-family: "Segoe Fluent Icons";
+                                                font-size: 9px;
+                                                color: #60cdff;
+                                                vertical-alignment: center;
+                                            }
+
+                                            Text {
+                                                text: "Size";
+                                                font-size: 12px;
+                                                color: root.sort_column == "size" ? #ffffff : #a6a6a6;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: right;
+                                            }
+                                        }
+
+                                        size_hdr_touch := TouchArea {
+                                            clicked => { root.sort_by("size"); }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if root.view_mode == "details": Rectangle { height: 1px; background: #2b2b2b; }
+
+                            // Details List Rows
+                            if root.view_mode == "details": ScrollView {
+                                vertical-stretch: 1;
+
+                                VerticalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 12px;
+                                    padding-top: 4px;
+                                    padding-bottom: 8px;
+                                    spacing: 1px;
+
+                                    if root.entries.length == 0: Rectangle {
+                                        height: 120px;
+                                        Text {
+                                            text: root.search_text != "" ? "No items match your search." : "This folder is empty.";
+                                            font-size: 13px;
+                                            color: #777777;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    for entry[e_idx] in root.entries: Rectangle {
+                                        height: 32px;
+                                        border-radius: 4px;
+                                        background: root.selected_index == e_idx ? #2c2c2c : (row_touch.has-hover ? #222222 : transparent);
+
+                                        // Windows 11 Left Blue Selection Pill
+                                        if root.selected_index == e_idx: Rectangle {
+                                            x: 2px;
+                                            y: 8px;
+                                            width: 3px;
+                                            height: 16px;
+                                            border-radius: 1.5px;
+                                            background: #60cdff;
+                                        }
+
+                                        HorizontalLayout {
+                                            padding-left: 12px;
+                                            padding-right: 8px;
+                                            spacing: 12px;
+
+                                            // Name + Authentic Windows 11 Icon
+                                            HorizontalLayout {
+                                                horizontal-stretch: 4;
+                                                spacing: 10px;
+
+                                                FluentEntryIcon {
+                                                    y: (parent.height - self.height) / 2;
+                                                    is_dir: entry.is_dir;
+                                                    glyph: entry.icon_glyph;
+                                                    glyph_color: entry.icon_color;
+                                                    large: false;
+                                                }
+
+                                                Text {
+                                                    horizontal-stretch: 1;
+                                                    text: entry.name;
+                                                    font-size: 13px;
+                                                    color: root.selected_index == e_idx ? #ffffff : #e6e6e6;
+                                                    vertical-alignment: center;
+                                                    horizontal-alignment: left;
+                                                    overflow: elide;
+                                                }
+                                            }
+
+                                            // Spacer matching header separator
+                                            Rectangle { width: 1px; }
+
+                                            // Date modified
+                                            Text {
+                                                width: 150px;
+                                                text: entry.mtime_str;
+                                                font-size: 12px;
+                                                color: #9e9e9e;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: left;
+                                                overflow: elide;
+                                            }
+
+                                            Rectangle { width: 1px; }
+
+                                            // Type
+                                            Text {
+                                                width: 170px;
+                                                text: entry.type_str;
+                                                font-size: 12px;
+                                                color: #9e9e9e;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: left;
+                                                overflow: elide;
+                                            }
+
+                                            Rectangle { width: 1px; }
+
+                                            // Size
+                                            Text {
+                                                width: 95px;
+                                                text: entry.size_str;
+                                                font-size: 12px;
+                                                color: #9e9e9e;
+                                                vertical-alignment: center;
+                                                horizontal-alignment: right;
+                                                overflow: elide;
+                                            }
+                                        }
+
+                                        row_touch := TouchArea {
+                                            clicked => {
+                                                key_scope.focus();
+                                                root.item_clicked(e_idx);
+                                            }
+                                            double-clicked => {
+                                                root.item_double_clicked(e_idx);
+                                            }
+                                            pointer-event(pe) => {
+                                                if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
+                                                    root.item_clicked(e_idx);
+                                                    root.item_right_clicked(e_idx);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Large Icons View
+                            if root.view_mode == "icons": ScrollView {
+                                vertical-stretch: 1;
+
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+
+                                    for entry[e_idx] in root.entries: Rectangle {
+                                        height: 64px;
+                                        border-radius: 6px;
+                                        background: root.selected_index == e_idx ? #2c2c2c : (grid_touch.has-hover ? #222222 : transparent);
+
+                                        if root.selected_index == e_idx: Rectangle {
+                                            x: 2px;
+                                            y: 14px;
+                                            width: 3px;
+                                            height: 36px;
+                                            border-radius: 1.5px;
+                                            background: #60cdff;
+                                        }
+
+                                        HorizontalLayout {
+                                            padding-left: 14px;
+                                            padding-right: 14px;
+                                            spacing: 14px;
+
+                                            FluentEntryIcon {
+                                                y: (parent.height - self.height) / 2;
+                                                is_dir: entry.is_dir;
+                                                glyph: entry.icon_glyph;
+                                                glyph_color: entry.icon_color;
+                                                large: true;
+                                            }
+
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                padding-top: 12px;
+                                                padding-bottom: 12px;
+                                                spacing: 3px;
+
+                                                Text {
+                                                    text: entry.name;
+                                                    font-size: 13px;
+                                                    font-weight: 500;
+                                                    color: #f0f0f0;
+                                                    horizontal-alignment: left;
+                                                    overflow: elide;
+                                                }
+
+                                                Text {
+                                                    text: entry.type_str + (entry.size_str != "" ? "  •  " + entry.size_str : "");
+                                                    font-size: 11px;
+                                                    color: #909090;
+                                                    horizontal-alignment: left;
+                                                    overflow: elide;
+                                                }
+                                            }
+                                        }
+
+                                        grid_touch := TouchArea {
+                                            clicked => {
+                                                key_scope.focus();
+                                                root.item_clicked(e_idx);
+                                            }
+                                            double-clicked => {
+                                                root.item_double_clicked(e_idx);
+                                            }
+                                            pointer-event(pe) => {
+                                                if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
+                                                    root.item_clicked(e_idx);
+                                                    root.item_right_clicked(e_idx);
+                                                }
                                             }
                                         }
                                     }
@@ -901,231 +1573,259 @@ export component MainWindow inherits Window {
                             }
                         }
                     }
-                }
-            }
 
-            // Preview Pane (Collapsible)
-            if root.show_preview: Rectangle {
-                width: 340px;
-                background: #1c1c1c;
-
-                VerticalLayout {
-                    padding: 14px;
-                    spacing: 12px;
-
-                    // Preview Header
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
-
-                        Text {
-                            text: "👁";
-                            font-size: 16px;
-                            vertical-alignment: center;
-                        }
-
-                        VerticalLayout {
-                            spacing: 2px;
-                            horizontal-stretch: 1;
-
-                            Text {
-                                text: root.preview_title != "" ? root.preview_title : "Preview";
-                                font-size: 14px;
-                                font-weight: 600;
-                                color: #ffffff;
-                                overflow: elide;
-                            }
-
-                            Text {
-                                text: root.preview_subtitle;
-                                font-size: 11px;
-                                color: #888888;
-                                overflow: elide;
-                            }
-                        }
-
-                        IconButton {
-                            text: "✕";
-                            clicked => { root.command_toggle_preview(); }
-                        }
+                    // Right Preview Pane (Universal Excel / Word / PPTX / Code / Archive Preview)
+                    if root.show_preview: Rectangle {
+                        width: 1px;
+                        background: #2b2b2b;
                     }
 
-                    Rectangle { height: 1px; background: #303030; }
+                    if root.show_preview: Rectangle {
+                        width: 350px;
+                        background: #1d1d1d;
 
-                    // Spreadsheet / Table Preview (Excel & CSV)
-                    if root.preview_type == "table": ScrollView {
                         VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
+                            padding: 14px;
+                            spacing: 10px;
 
-                            // Table Header Row
-                            Rectangle {
-                                height: 26px;
-                                background: #282828;
-                                HorizontalLayout {
-                                    padding-left: 6px;
-                                    padding-right: 6px;
-                                    spacing: 8px;
-                                    for h in root.preview_table_headers: Text {
-                                        text: h;
-                                        font-size: 11px;
+                            HorizontalLayout {
+                                height: 32px;
+                                spacing: 10px;
+
+                                Text {
+                                    width: 20px;
+                                    text: "\u{E890}";
+                                    font-family: "Segoe Fluent Icons";
+                                    font-size: 15px;
+                                    color: #60cdff;
+                                    vertical-alignment: center;
+                                }
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    spacing: 1px;
+
+                                    Text {
+                                        text: root.preview_title != "" ? root.preview_title : "Preview Pane";
+                                        font-size: 13px;
                                         font-weight: 600;
-                                        color: #60cdff;
+                                        color: #ffffff;
+                                        horizontal-alignment: left;
                                         overflow: elide;
-                                        width: 80px;
                                     }
-                                }
-                            }
 
-                            // Table Data Rows
-                            for row in root.preview_table_rows: Rectangle {
-                                height: 24px;
-                                background: #202020;
-                                HorizontalLayout {
-                                    padding-left: 6px;
-                                    padding-right: 6px;
-                                    spacing: 8px;
-                                    for cell in row.cells: Text {
-                                        text: cell;
+                                    Text {
+                                        text: root.preview_subtitle;
                                         font-size: 11px;
-                                        color: #d0d0d0;
+                                        color: #888888;
+                                        horizontal-alignment: left;
                                         overflow: elide;
-                                        width: 80px;
+                                    }
+                                }
+
+                                FluentIconButton {
+                                    icon: "\u{E8BB}";
+                                    clicked => { root.command_toggle_preview(); }
+                                }
+                            }
+
+                            Rectangle { height: 1px; background: #2e2e2e; }
+
+                            if root.preview_type == "table": ScrollView {
+                                vertical-stretch: 1;
+                                VerticalLayout {
+                                    spacing: 2px;
+
+                                    Rectangle {
+                                        height: 26px;
+                                        background: #272727;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 8px;
+                                            for h in root.preview_table_headers: Text {
+                                                width: 85px;
+                                                text: h;
+                                                font-size: 11px;
+                                                font-weight: 600;
+                                                color: #60cdff;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+                                        }
+                                    }
+
+                                    for row in root.preview_table_rows: Rectangle {
+                                        height: 24px;
+                                        background: #202020;
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 8px;
+                                            for cell in row.cells: Text {
+                                                width: 85px;
+                                                text: cell;
+                                                font-size: 11px;
+                                                color: #d8d8d8;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        }
-                    }
 
-                    // Text / Code / Word / Markdown Preview
-                    if root.preview_type == "text": ScrollView {
-                        Text {
-                            text: root.preview_text_content;
-                            font-family: "Consolas, Courier New, monospace";
-                            font-size: 12px;
-                            color: #dcdcdc;
-                            wrap: word-wrap;
-                        }
-                    }
-
-                    // No preview or empty state
-                    if root.preview_type == "none": VerticalLayout {
-                        alignment: center;
-                        spacing: 8px;
-                        horizontal-stretch: 1;
-
-                        Text {
-                            text: "Select a file to preview.";
-                            font-size: 13px;
-                            color: #777777;
-                            horizontal-alignment: center;
-                        }
-                    }
-                }
-            }
-
-            // Details Pane (Collapsible)
-            if root.show_details: Rectangle {
-                width: 280px;
-                background: #1c1c1c;
-
-                VerticalLayout {
-                    padding: 14px;
-                    spacing: 12px;
-
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
-
-                        Text {
-                            text: "ℹ";
-                            font-size: 16px;
-                            vertical-alignment: center;
-                        }
-
-                        Text {
-                            text: "Details";
-                            font-size: 14px;
-                            font-weight: 600;
-                            color: #ffffff;
-                            horizontal-stretch: 1;
-                        }
-
-                        IconButton {
-                            text: "✕";
-                            clicked => { root.command_toggle_details(); }
-                        }
-                    }
-
-                    Rectangle { height: 1px; background: #303030; }
-
-                    ScrollView {
-                        VerticalLayout {
-                            spacing: 8px;
-                            alignment: start;
-
-                            for prop in root.item_properties: VerticalLayout {
-                                spacing: 2px;
+                            if root.preview_type == "text": ScrollView {
+                                vertical-stretch: 1;
                                 Text {
-                                    text: prop.name;
-                                    font-size: 11px;
-                                    color: #888888;
-                                }
-                                Text {
-                                    text: prop.value;
+                                    text: root.preview_text_content;
+                                    font-family: "Cascadia Mono, Consolas, monospace";
                                     font-size: 12px;
-                                    color: #e0e0e0;
+                                    color: #dcdcdc;
                                     wrap: word-wrap;
                                 }
-                                Rectangle { height: 1px; background: #262626; }
+                            }
+
+                            if root.preview_type == "none": Rectangle {
+                                vertical-stretch: 1;
+                                Text {
+                                    text: "Select a file to preview.";
+                                    font-size: 12px;
+                                    color: #777777;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+
+                    // Right Details Pane (Windows IPropertyStore Metadata)
+                    if root.show_details: Rectangle {
+                        width: 1px;
+                        background: #2b2b2b;
+                    }
+
+                    if root.show_details: Rectangle {
+                        width: 290px;
+                        background: #1d1d1d;
+
+                        VerticalLayout {
+                            padding: 14px;
+                            spacing: 10px;
+
+                            HorizontalLayout {
+                                height: 32px;
+                                spacing: 10px;
+
+                                Text {
+                                    width: 20px;
+                                    text: "\u{E946}";
+                                    font-family: "Segoe Fluent Icons";
+                                    font-size: 15px;
+                                    color: #60cdff;
+                                    vertical-alignment: center;
+                                }
+
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: "Details";
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    color: #ffffff;
+                                    vertical-alignment: center;
+                                    horizontal-alignment: left;
+                                }
+
+                                FluentIconButton {
+                                    icon: "\u{E8BB}";
+                                    clicked => { root.command_toggle_details(); }
+                                }
+                            }
+
+                            Rectangle { height: 1px; background: #2e2e2e; }
+
+                            ScrollView {
+                                vertical-stretch: 1;
+                                VerticalLayout {
+                                    spacing: 8px;
+
+                                    for prop in root.item_properties: VerticalLayout {
+                                        spacing: 2px;
+                                        Text {
+                                            text: prop.name;
+                                            font-size: 11px;
+                                            color: #888888;
+                                            horizontal-alignment: left;
+                                        }
+                                        Text {
+                                            text: prop.value;
+                                            font-size: 12px;
+                                            color: #e4e4e4;
+                                            horizontal-alignment: left;
+                                            wrap: word-wrap;
+                                        }
+                                        Rectangle { height: 1px; background: #272727; }
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
-        }
 
-        // 5. STATUS BAR
-        Rectangle {
-            height: 28px;
-            background: #202020;
+                // =========================================================
+                // 5. WINDOWS 11 STATUS BAR
+                // =========================================================
+                Rectangle { height: 1px; background: #2b2b2b; }
 
-            HorizontalLayout {
-                padding-left: 16px;
-                padding-right: 16px;
-                spacing: 16px;
-                alignment: center;
+                Rectangle {
+                    height: 28px;
+                    background: #191919;
 
-                Text {
-                    text: root.status_item_count;
-                    font-size: 11px;
-                    color: #999999;
-                    vertical-alignment: center;
-                }
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        spacing: 14px;
 
-                if root.status_selection_info != "": Text {
-                    text: root.status_selection_info;
-                    font-size: 11px;
-                    color: #999999;
-                    vertical-alignment: center;
-                }
+                        Text {
+                            text: root.status_item_count;
+                            font-size: 11px;
+                            color: #a0a0a0;
+                            vertical-alignment: center;
+                        }
 
-                Rectangle { horizontal-stretch: 1; }
+                        if root.status_selection_info != "": Rectangle {
+                            width: 1px;
+                            height: 12px;
+                            y: 8px;
+                            background: #383838;
+                        }
 
-                // Small view mode buttons
-                IconButton {
-                    text: "☰";
-                    is_active: root.view_mode == "details";
-                    clicked => {
-                        root.view_mode = "details";
-                    }
-                }
+                        if root.status_selection_info != "": Text {
+                            text: root.status_selection_info;
+                            font-size: 11px;
+                            color: #a0a0a0;
+                            vertical-alignment: center;
+                        }
 
-                IconButton {
-                    text: "☷";
-                    is_active: root.view_mode == "icons";
-                    clicked => {
-                        root.view_mode = "icons";
+                        Rectangle { horizontal-stretch: 1; }
+
+                        FluentIconButton {
+                            width: 24px;
+                            height: 24px;
+                            y: 2px;
+                            icon: "\u{E8FD}";
+                            is_active: root.view_mode == "details";
+                            clicked => { root.view_mode = "details"; }
+                        }
+
+                        FluentIconButton {
+                            width: 24px;
+                            height: 24px;
+                            y: 2px;
+                            icon: "\u{E8A9}";
+                            is_active: root.view_mode == "icons";
+                            clicked => { root.view_mode = "icons"; }
+                        }
                     }
                 }
             }

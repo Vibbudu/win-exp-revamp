@@ -7,9 +7,13 @@ use std::sync::Arc;
 
 use indexer::IndexerEngine;
 use ipc_types::{Entry, Preview};
-use slint::{Color, ModelRc, SharedString, VecModel};
-use windows::Win32::Foundation::{HWND, POINT};
-use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetForegroundWindow};
+use slint::{Color, ComponentHandle, ModelRc, SharedString, VecModel};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
+use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetCursorPos, GetForegroundWindow, HTCAPTION, IsZoomed, PostMessageW, SW_MAXIMIZE,
+    SW_MINIMIZE, SW_RESTORE, SendMessageW, ShowWindow, WM_CLOSE, WM_NCLBUTTONDOWN,
+};
 
 slint::include_modules!();
 
@@ -17,6 +21,8 @@ struct TabState {
     id: i32,
     title: String,
     path: PathBuf,
+    history_back: Vec<PathBuf>,
+    history_forward: Vec<PathBuf>,
 }
 
 struct ExplorerState {
@@ -25,6 +31,7 @@ struct ExplorerState {
     history_forward: Vec<PathBuf>,
     tabs: Vec<TabState>,
     active_tab_idx: usize,
+    next_tab_id: i32,
     entries: Vec<Entry>,
     sort_column: String,
     sort_asc: bool,
@@ -48,7 +55,7 @@ fn get_cursor_point() -> POINT {
 
 fn format_bytes(bytes: u64) -> String {
     if bytes == 0 {
-        return "0 B".to_string();
+        return "0 KB".to_string();
     }
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
@@ -57,9 +64,9 @@ fn format_bytes(bytes: u64) -> String {
 
     let b = bytes as f64;
     if b < KB {
-        format!("{bytes} B")
+        "1 KB".to_string()
     } else if b < MB {
-        format!("{:.1} KB", b / KB)
+        format!("{:.0} KB", (b / KB).ceil())
     } else if b < GB {
         format!("{:.1} MB", b / MB)
     } else if b < TB {
@@ -90,75 +97,80 @@ fn format_mtime(millis: i64) -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
 
-    format!("{y:04}-{m:02}-{d:02} {hours:02}:{minutes:02}")
+    format!("{d:02}-{m:02}-{y:04} {hours:02}:{minutes:02}")
 }
 
+/// Resolves a crisp Segoe Fluent Icons codepoint, tint color, and Windows 11 Type description.
 fn resolve_icon_and_type(entry: &Entry) -> (&'static str, Color, String) {
     if entry.is_dir {
-        return ("📁", Color::from_rgb_u8(255, 185, 0), "File folder".to_string());
+        return (
+            "\u{E8B7}",
+            Color::from_rgb_u8(255, 206, 61),
+            "File folder".to_string(),
+        );
     }
 
     let ext = entry.ext.to_lowercase();
     match ext.as_str() {
-        "xlsx" | "xls" | "csv" | "ods" => (
-            "📊",
-            Color::from_rgb_u8(16, 124, 65),
+        "xlsx" | "xls" | "xlsb" | "csv" | "ods" => (
+            "\u{F0E3}",
+            Color::from_rgb_u8(33, 163, 102),
             "Microsoft Excel Worksheet".to_string(),
         ),
-        "docx" | "doc" => (
-            "📄",
-            Color::from_rgb_u8(24, 90, 189),
+        "docx" | "doc" | "rtf" => (
+            "\u{E8A5}",
+            Color::from_rgb_u8(65, 132, 243),
             "Microsoft Word Document".to_string(),
         ),
         "pptx" | "ppt" => (
-            "📽️",
-            Color::from_rgb_u8(216, 59, 1),
-            "PowerPoint Presentation".to_string(),
+            "\u{E8A5}",
+            Color::from_rgb_u8(235, 108, 71),
+            "Microsoft PowerPoint Presentation".to_string(),
         ),
         "pdf" => (
-            "📑",
-            Color::from_rgb_u8(232, 17, 35),
+            "\u{EA90}",
+            Color::from_rgb_u8(244, 67, 54),
             "PDF Document".to_string(),
         ),
         "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "svg" | "ico" => (
-            "🖼️",
-            Color::from_rgb_u8(153, 102, 204),
-            format!("{} Image", ext.to_uppercase()),
+            "\u{EB9F}",
+            Color::from_rgb_u8(178, 136, 255),
+            format!("{} File", ext.to_uppercase()),
         ),
         "zip" | "7z" | "rar" | "tar" | "gz" => (
-            "📦",
-            Color::from_rgb_u8(211, 134, 34),
-            "Compressed Archive".to_string(),
+            "\u{F012}",
+            Color::from_rgb_u8(245, 186, 24),
+            "Compressed (zipped) Folder".to_string(),
         ),
-        "mp4" | "mkv" | "mov" | "avi" | "wmv" => (
-            "🎬",
-            Color::from_rgb_u8(216, 59, 1),
-            "Video File".to_string(),
+        "mp4" | "mkv" | "mov" | "avi" | "wmv" | "webm" => (
+            "\u{E8B2}",
+            Color::from_rgb_u8(0, 207, 232),
+            format!("{} Video", ext.to_uppercase()),
         ),
-        "mp3" | "wav" | "flac" | "aac" | "ogg" => (
-            "🎵",
-            Color::from_rgb_u8(0, 120, 212),
-            "Audio File".to_string(),
+        "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" => (
+            "\u{E8D6}",
+            Color::from_rgb_u8(255, 107, 139),
+            format!("{} Audio", ext.to_uppercase()),
         ),
-        "rs" | "ts" | "js" | "py" | "c" | "cpp" | "h" | "json" | "toml" | "xml" | "html"
-        | "css" => (
-            "📜",
+        "rs" | "ts" | "tsx" | "js" | "jsx" | "py" | "c" | "cpp" | "h" | "json" | "toml"
+        | "yaml" | "yml" | "xml" | "html" | "css" | "slint" => (
+            "\u{E943}",
             Color::from_rgb_u8(96, 205, 255),
             format!("{} Source File", ext.to_uppercase()),
         ),
         "exe" | "msi" | "bat" | "cmd" | "ps1" => (
-            "⚙️",
-            Color::from_rgb_u8(80, 230, 255),
+            "\u{E756}",
+            Color::from_rgb_u8(120, 210, 255),
             "Application".to_string(),
         ),
-        "txt" | "md" | "log" => (
-            "📝",
-            Color::from_rgb_u8(220, 220, 220),
+        "txt" | "md" | "log" | "ini" => (
+            "\u{E8A5}",
+            Color::from_rgb_u8(210, 210, 210),
             "Text Document".to_string(),
         ),
         _ => (
-            "📄",
-            Color::from_rgb_u8(190, 190, 190),
+            "\u{E7C3}",
+            Color::from_rgb_u8(180, 180, 180),
             if ext.is_empty() {
                 "File".to_string()
             } else {
@@ -170,12 +182,8 @@ fn resolve_icon_and_type(entry: &Entry) -> (&'static str, Color, String) {
 
 fn build_crumbs(path: &Path) -> Vec<CrumbItem> {
     let mut crumbs = Vec::new();
-    crumbs.push(CrumbItem {
-        label: "This PC".into(),
-        path: "home".into(),
-    });
-
     let mut current = PathBuf::new();
+
     for comp in path.components() {
         match comp {
             std::path::Component::Prefix(prefix) => {
@@ -201,8 +209,34 @@ fn build_crumbs(path: &Path) -> Vec<CrumbItem> {
     crumbs
 }
 
+fn detect_nav_key(path: &Path) -> &'static str {
+    let s = path.to_string_lossy().to_lowercase();
+    if s.ends_with("\\desktop") {
+        "desktop"
+    } else if s.ends_with("\\downloads") {
+        "downloads"
+    } else if s.ends_with("\\documents") {
+        "documents"
+    } else if s.ends_with("\\pictures") {
+        "pictures_folder"
+    } else if s.ends_with("\\music") {
+        "music"
+    } else if s.ends_with("\\videos") {
+        "videos"
+    } else if let Some(up) = std::env::var_os("USERPROFILE") {
+        if Path::new(&up) == path {
+            "home"
+        } else {
+            ""
+        }
+    } else {
+        ""
+    }
+}
+
 fn resolve_special_path(raw: &str) -> PathBuf {
-    match raw.to_lowercase().as_str() {
+    let trimmed = raw.trim();
+    match trimmed.to_lowercase().as_str() {
         "home" => {
             if let Some(user_profile) = std::env::var_os("USERPROFILE") {
                 PathBuf::from(user_profile)
@@ -216,7 +250,7 @@ fn resolve_special_path(raw: &str) -> PathBuf {
         "pictures" => resolve_known_folder("Pictures"),
         "music" => resolve_known_folder("Music"),
         "videos" => resolve_known_folder("Videos"),
-        _ => PathBuf::from(raw),
+        _ => PathBuf::from(trimmed),
     }
 }
 
@@ -234,8 +268,138 @@ fn resolve_known_folder(name: &str) -> PathBuf {
     }
 }
 
+fn select_entry_and_update_panes(ui: &MainWindow, st: &mut ExplorerState, idx: usize) {
+    if idx >= st.entries.len() {
+        return;
+    }
+    st.selected_idx = Some(idx);
+    ui.set_selected_index(idx as i32);
+
+    if let Some(entry) = st.entries.get(idx) {
+        let p = entry.path.clone();
+        ui.set_selected_path(p.clone().into());
+        let size_str = if entry.is_dir {
+            "".to_string()
+        } else {
+            format!("  {}", format_bytes(entry.size))
+        };
+        ui.set_status_selection_info(format!("1 item selected{size_str}").into());
+
+        // Populate Details pane if visible
+        if st.show_details {
+            let props = shell_interop::props::properties(&p);
+            let prop_items: Vec<PropertyItem> = props
+                .into_iter()
+                .map(|pr| PropertyItem {
+                    name: pr.label.into(),
+                    value: pr.value.into(),
+                })
+                .collect();
+            ui.set_item_properties(ModelRc::new(Rc::new(VecModel::from(prop_items))));
+        }
+
+        // Populate Universal Preview pane if visible
+        if st.show_preview {
+            let (_, _, type_desc) = resolve_icon_and_type(entry);
+            ui.set_preview_title(entry.name.clone().into());
+            ui.set_preview_subtitle(type_desc.into());
+
+            if entry.is_dir {
+                let sub_count = fs_core::list_dir(&p).map(|v| v.len()).unwrap_or(0);
+                ui.set_preview_type("text".into());
+                ui.set_preview_text_content(
+                    format!("Folder: {}\nPath: {}\nContains: {} items", entry.name, p, sub_count)
+                        .into(),
+                );
+                return;
+            }
+
+            let prev = preview::generate_preview(&p);
+            match prev {
+                Preview::Sheet { rows, .. } => {
+                    ui.set_preview_type("table".into());
+                    let mut row_models = Vec::new();
+                    let mut header_model = Vec::new();
+                    for (r_idx, r) in rows.iter().enumerate() {
+                        if r_idx == 0 {
+                            header_model = r.clone();
+                        } else {
+                            let cell_strings: Vec<SharedString> =
+                                r.iter().map(|c| c.clone().into()).collect();
+                            row_models.push(PreviewRow {
+                                cells: ModelRc::new(Rc::new(VecModel::from(cell_strings))),
+                            });
+                        }
+                    }
+                    let headers: Vec<SharedString> =
+                        header_model.into_iter().map(|h| h.into()).collect();
+                    ui.set_preview_table_headers(ModelRc::new(Rc::new(VecModel::from(headers))));
+                    ui.set_preview_table_rows(ModelRc::new(Rc::new(VecModel::from(row_models))));
+                }
+                Preview::Text { content, .. } => {
+                    ui.set_preview_type("text".into());
+                    ui.set_preview_text_content(content.into());
+                }
+                Preview::Html { html } => {
+                    let plain = html
+                        .replace("<p>", "")
+                        .replace("</p>", "\n\n")
+                        .replace("<br>", "\n")
+                        .replace("<h1>", "# ")
+                        .replace("</h1>", "\n\n")
+                        .replace("<h2>", "## ")
+                        .replace("</h2>", "\n\n")
+                        .replace("<strong>", "")
+                        .replace("</strong>", "")
+                        .replace("<em>", "")
+                        .replace("</em>", "");
+                    ui.set_preview_type("text".into());
+                    ui.set_preview_text_content(plain.into());
+                }
+                Preview::Slides { slides } => {
+                    let mut text = String::new();
+                    for (slide_idx, s) in slides.iter().enumerate() {
+                        text.push_str(&format!("─── Slide {} ───\n", slide_idx + 1));
+                        for line in s {
+                            text.push_str(line);
+                            text.push('\n');
+                        }
+                        text.push('\n');
+                    }
+                    ui.set_preview_type("text".into());
+                    ui.set_preview_text_content(text.into());
+                }
+                Preview::Archive { entries, total } => {
+                    let mut text = format!("Archive contains {total} items:\n\n");
+                    for arch in entries {
+                        text.push_str(&format!(
+                            "{}  {}\n",
+                            if arch.is_dir { "[DIR]" } else { "[FILE]" },
+                            arch.name
+                        ));
+                    }
+                    ui.set_preview_type("text".into());
+                    ui.set_preview_text_content(text.into());
+                }
+                _ => {
+                    ui.set_preview_type("text".into());
+                    ui.set_preview_text_content(
+                        format!(
+                            "File: {}\nSize: {}\nPath: {}",
+                            entry.name,
+                            format_bytes(entry.size),
+                            entry.path
+                        )
+                        .into(),
+                    );
+                }
+            }
+        }
+    }
+}
+
 fn main() -> Result<(), slint::PlatformError> {
-    // 1. Initialize STA on worker threads for COM APIs
+    // 1. Initialize STA worker pool for Windows Shell COM operations
     let _sta_pool = shell_interop::StaPool::new("sta-pool", 2);
 
     let main_window = MainWindow::new()?;
@@ -278,7 +442,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let initial_title = initial_path
         .file_name()
         .map(|f| f.to_string_lossy().to_string())
-        .unwrap_or_else(|| "This PC".to_string());
+        .unwrap_or_else(|| "Home".to_string());
 
     let state = Rc::new(RefCell::new(ExplorerState {
         current_path: initial_path.clone(),
@@ -288,8 +452,11 @@ fn main() -> Result<(), slint::PlatformError> {
             id: 0,
             title: initial_title,
             path: initial_path.clone(),
+            history_back: Vec::new(),
+            history_forward: Vec::new(),
         }],
         active_tab_idx: 0,
+        next_tab_id: 1,
         entries: Vec::new(),
         sort_column: "name".to_string(),
         sort_asc: true,
@@ -299,7 +466,7 @@ fn main() -> Result<(), slint::PlatformError> {
         selected_idx: None,
     }));
 
-    // 4. Background indexer for instant MFT search
+    // 4. Start Priority + Background Indexer (indexes Desktop/Documents/Downloads immediately)
     let indexer = Arc::new(IndexerEngine::new());
     indexer.start_background_indexing();
 
@@ -317,18 +484,18 @@ fn main() -> Result<(), slint::PlatformError> {
             let mut st = state.borrow_mut();
             let path = st.current_path.clone();
 
-            // 1. Enumerate folder using fs_core large fetch Win32
+            // 1. Enumerate folder using fs_core large-fetch Win32 API
             let mut entries = match fs_core::list_dir(&path.to_string_lossy()) {
                 Ok(entries) => entries,
                 Err(_) => Vec::new(),
             };
 
-            // 2. Sort entries
+            // 2. Sort entries (folders first, natural StrCmpLogicalW order)
             let sort_col = st.sort_column.clone();
             let asc = st.sort_asc;
             entries.sort_by(|a, b| {
                 if a.is_dir != b.is_dir {
-                    return b.is_dir.cmp(&a.is_dir); // folders first
+                    return b.is_dir.cmp(&a.is_dir);
                 }
                 let ord = match sort_col.as_str() {
                     "date" => a.modified.cmp(&b.modified),
@@ -370,22 +537,32 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_selected_index(-1);
             ui.set_status_item_count(format!("{} items", entries.len()).into());
             ui.set_status_selection_info("".into());
+            ui.set_is_renaming(false);
 
-            // 4. Update breadcrumbs & path
+            // 4. Update breadcrumbs, active nav highlight, and folder title
             let crumbs = build_crumbs(&path);
             ui.set_crumbs(ModelRc::new(Rc::new(VecModel::from(crumbs))));
             ui.set_current_path(path.to_string_lossy().to_string().into());
+            ui.set_active_nav_key(detect_nav_key(&path).into());
+
+            let folder_name = path
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.to_string_lossy().to_string());
+            ui.set_current_folder_name(folder_name.clone().into());
+
             ui.set_can_go_back(!st.history_back.is_empty());
             ui.set_can_go_forward(!st.history_forward.is_empty());
 
-            // 5. Update tabs
+            // 5. Sync active tab state
             let active_idx = st.active_tab_idx;
+            let back_clone = st.history_back.clone();
+            let fwd_clone = st.history_forward.clone();
             if let Some(tab) = st.tabs.get_mut(active_idx) {
                 tab.path = path.clone();
-                tab.title = path
-                    .file_name()
-                    .map(|f| f.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "This PC".to_string());
+                tab.title = folder_name;
+                tab.history_back = back_clone;
+                tab.history_forward = fwd_clone;
             }
 
             let tab_items: Vec<TabItem> = st
@@ -411,20 +588,74 @@ fn main() -> Result<(), slint::PlatformError> {
     // Initial render
     update_ui();
 
-    // 5. Navigation Callbacks
+    // 5. Frameless Window Caption Callbacks (Drag, Minimize, Maximize/Restore, Close)
+    main_window.on_window_drag(move || {
+        let hwnd = get_active_hwnd();
+        if !hwnd.0.is_null() {
+            unsafe {
+                let _ = ReleaseCapture();
+                SendMessageW(hwnd, WM_NCLBUTTONDOWN, Some(WPARAM(HTCAPTION as usize)), Some(LPARAM(0)));
+            }
+        }
+    });
+
+    main_window.on_window_minimize(move || {
+        let hwnd = get_active_hwnd();
+        if !hwnd.0.is_null() {
+            unsafe {
+                let _ = ShowWindow(hwnd, SW_MINIMIZE);
+            }
+        }
+    });
+
+    main_window.on_window_maximize(move || {
+        let hwnd = get_active_hwnd();
+        if !hwnd.0.is_null() {
+            unsafe {
+                if IsZoomed(hwnd).as_bool() {
+                    let _ = ShowWindow(hwnd, SW_RESTORE);
+                } else {
+                    let _ = ShowWindow(hwnd, SW_MAXIMIZE);
+                }
+            }
+        }
+    });
+
+    main_window.on_window_close(move || {
+        let hwnd = get_active_hwnd();
+        if !hwnd.0.is_null() {
+            unsafe {
+                let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+            }
+        }
+        let _ = slint::quit_event_loop();
+    });
+
+    // 6. Navigation Callbacks
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
         main_window.on_nav_to_path(move |target| {
             let p = resolve_special_path(target.as_str());
             if p.exists() {
-                let mut st = state.borrow_mut();
-                let curr = st.current_path.clone();
-                st.history_back.push(curr);
-                st.history_forward.clear();
-                st.current_path = p;
-                drop(st);
-                update_ui();
+                if p.is_dir() {
+                    let mut st = state.borrow_mut();
+                    let curr = st.current_path.clone();
+                    if curr != p {
+                        st.history_back.push(curr);
+                        st.history_forward.clear();
+                        st.current_path = p;
+                    }
+                    drop(st);
+                    if let Some(ui) = main_window_weak.upgrade() {
+                        ui.set_search_text("".into());
+                    }
+                    update_ui();
+                } else {
+                    let hwnd = get_active_hwnd();
+                    let _ = shell_interop::ops::shell_open(hwnd, &p.to_string_lossy(), None);
+                }
             }
         });
     }
@@ -432,6 +663,7 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
         main_window.on_nav_back(move || {
             let mut st = state.borrow_mut();
             if let Some(prev) = st.history_back.pop() {
@@ -439,6 +671,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 st.history_forward.push(curr);
                 st.current_path = prev;
                 drop(st);
+                if let Some(ui) = main_window_weak.upgrade() {
+                    ui.set_search_text("".into());
+                }
                 update_ui();
             }
         });
@@ -447,6 +682,7 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
         main_window.on_nav_forward(move || {
             let mut st = state.borrow_mut();
             if let Some(next) = st.history_forward.pop() {
@@ -454,6 +690,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 st.history_back.push(curr);
                 st.current_path = next;
                 drop(st);
+                if let Some(ui) = main_window_weak.upgrade() {
+                    ui.set_search_text("".into());
+                }
                 update_ui();
             }
         });
@@ -462,15 +701,21 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
         main_window.on_nav_up(move || {
             let mut st = state.borrow_mut();
             if let Some(parent) = st.current_path.parent().map(|p| p.to_path_buf()) {
                 let curr = st.current_path.clone();
-                st.history_back.push(curr);
-                st.history_forward.clear();
-                st.current_path = parent;
-                drop(st);
-                update_ui();
+                if curr != parent {
+                    st.history_back.push(curr);
+                    st.history_forward.clear();
+                    st.current_path = parent;
+                    drop(st);
+                    if let Some(ui) = main_window_weak.upgrade() {
+                        ui.set_search_text("".into());
+                    }
+                    update_ui();
+                }
             }
         });
     }
@@ -482,9 +727,10 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 6. Search callback (Instant SIMD Arena Query)
+    // 7. Instant Search Callback (Live Current Subtree BFS + SIMD Global Arena Index)
     {
         let indexer = Arc::clone(&indexer);
+        let state = Rc::clone(&state);
         let main_window_weak = main_window.as_weak();
         let update_ui_clone = update_ui.clone();
 
@@ -500,12 +746,19 @@ fn main() -> Result<(), slint::PlatformError> {
                 None => return,
             };
 
-            let results = indexer.search(&q, 300);
+            let curr_dir = {
+                let st = state.borrow();
+                st.current_path.to_string_lossy().to_string()
+            };
+
+            // Search both the active directory tree (instant live BFS) and the global SIMD index
+            let results = indexer.search_combined(&curr_dir, &q, 300);
+
             let entry_items: Vec<EntryItem> = results
-                .into_iter()
+                .iter()
                 .enumerate()
                 .map(|(i, e)| {
-                    let (icon, color, type_name) = resolve_icon_and_type(&e);
+                    let (icon, color, type_name) = resolve_icon_and_type(e);
                     EntryItem {
                         id: format!("{i}").into(),
                         name: e.name.clone().into(),
@@ -525,142 +778,47 @@ fn main() -> Result<(), slint::PlatformError> {
                 .collect();
 
             let count = entry_items.len();
+            {
+                let mut st = state.borrow_mut();
+                st.entries = results;
+                st.selected_idx = None;
+            }
+
             ui.set_entries(ModelRc::new(Rc::new(VecModel::from(entry_items))));
+            ui.set_selected_index(-1);
             ui.set_status_item_count(format!("{count} search results").into());
+            ui.set_status_selection_info("".into());
         });
     }
 
-    // 7. Item Selection & Previews
+    // 8. Item Selection & Universal Previews
     {
         let state = Rc::clone(&state);
         let main_window_weak = main_window.as_weak();
 
         main_window.on_item_clicked(move |idx| {
-            let i = idx as usize;
+            if idx < 0 {
+                return;
+            }
             let ui = match main_window_weak.upgrade() {
                 Some(w) => w,
                 None => return,
             };
-
             let mut st = state.borrow_mut();
-            st.selected_idx = Some(i);
-            ui.set_selected_index(idx);
-
-            if let Some(entry) = st.entries.get(i) {
-                let p = entry.path.clone();
-                let size_str = if entry.is_dir {
-                    "".to_string()
-                } else {
-                    format_bytes(entry.size)
-                };
-                ui.set_status_selection_info(format!("1 item selected  {size_str}").into());
-
-                // Generate Details properties via shell_interop
-                let props = shell_interop::props::properties(&p);
-                let prop_items: Vec<PropertyItem> = props
-                    .into_iter()
-                    .map(|pr| PropertyItem {
-                        name: pr.label.into(),
-                        value: pr.value.into(),
-                    })
-                    .collect();
-                ui.set_item_properties(ModelRc::new(Rc::new(VecModel::from(prop_items))));
-
-                // Generate Universal Preview if preview pane is active
-                if st.show_preview {
-                    let prev = preview::generate_preview(&p);
-                    ui.set_preview_title(entry.name.clone().into());
-                    ui.set_preview_subtitle(entry.type_name.clone().into());
-
-                    match prev {
-                        Preview::Sheet { rows, .. } => {
-                            ui.set_preview_type("table".into());
-                            let mut row_models = Vec::new();
-                            let mut header_model = Vec::new();
-                            for (r_idx, r) in rows.iter().enumerate() {
-                                if r_idx == 0 {
-                                    header_model = r.clone();
-                                } else {
-                                    let cell_strings: Vec<SharedString> =
-                                        r.iter().map(|c| c.clone().into()).collect();
-                                    row_models.push(PreviewRow {
-                                        cells: ModelRc::new(Rc::new(VecModel::from(cell_strings))),
-                                    });
-                                }
-                            }
-                            let headers: Vec<SharedString> =
-                                header_model.into_iter().map(|h| h.into()).collect();
-                            ui.set_preview_table_headers(ModelRc::new(Rc::new(VecModel::from(
-                                headers,
-                            ))));
-                            ui.set_preview_table_rows(ModelRc::new(Rc::new(VecModel::from(
-                                row_models,
-                            ))));
-                        }
-                        Preview::Text { content, .. } => {
-                            ui.set_preview_type("text".into());
-                            ui.set_preview_text_content(content.into());
-                        }
-                        Preview::Html { html } => {
-                            // Strip HTML tags for clean native text view
-                            let plain = html
-                                .replace("<p>", "")
-                                .replace("</p>", "\n\n")
-                                .replace("<br>", "\n")
-                                .replace("<h1>", "# ")
-                                .replace("</h1>", "\n\n")
-                                .replace("<h2>", "## ")
-                                .replace("</h2>", "\n\n")
-                                .replace("<strong>", "")
-                                .replace("</strong>", "")
-                                .replace("<em>", "")
-                                .replace("</em>", "");
-                            ui.set_preview_type("text".into());
-                            ui.set_preview_text_content(plain.into());
-                        }
-                        Preview::Slides { slides } => {
-                            let mut text = String::new();
-                            for (slide_idx, s) in slides.iter().enumerate() {
-                                text.push_str(&format!("--- Slide {} ---\n", slide_idx + 1));
-                                for line in s {
-                                    text.push_str(line);
-                                    text.push('\n');
-                                }
-                                text.push('\n');
-                            }
-                            ui.set_preview_type("text".into());
-                            ui.set_preview_text_content(text.into());
-                        }
-                        Preview::Archive { entries, total } => {
-                            let mut text = format!("Archive contains {total} items:\n\n");
-                            for arch in entries {
-                                text.push_str(&format!(
-                                    "{} {}\n",
-                                    if arch.is_dir { "📁" } else { "📄" },
-                                    arch.name
-                                ));
-                            }
-                            ui.set_preview_type("text".into());
-                            ui.set_preview_text_content(text.into());
-                        }
-                        _ => {
-                            ui.set_preview_type("text".into());
-                            ui.set_preview_text_content(
-                                format!("Preview available for {}", entry.name).into(),
-                            );
-                        }
-                    }
-                }
-            }
+            select_entry_and_update_panes(&ui, &mut st, idx as usize);
         });
     }
 
-    // 8. Double-click to open folder or launch file with default program
+    // 9. Double-click or Enter to open folder or launch file with default program
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
 
         main_window.on_item_double_clicked(move |idx| {
+            if idx < 0 {
+                return;
+            }
             let i = idx as usize;
             let entry_opt = {
                 let st = state.borrow();
@@ -675,9 +833,11 @@ fn main() -> Result<(), slint::PlatformError> {
                     st.history_forward.clear();
                     st.current_path = PathBuf::from(entry.path);
                     drop(st);
+                    if let Some(ui) = main_window_weak.upgrade() {
+                        ui.set_search_text("".into());
+                    }
                     update_ui();
                 } else {
-                    // Open with system default application via ShellExecuteW
                     let hwnd = get_active_hwnd();
                     let _ = shell_interop::ops::shell_open(hwnd, &entry.path, None);
                 }
@@ -685,9 +845,10 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 9. Native Win32 Context Menu on Right Click (IContextMenu3)
+    // 10. Native Win32 Context Menu on Right Click (IContextMenu3)
     {
         let state = Rc::clone(&state);
+        let update_ui = update_ui.clone();
 
         main_window.on_item_right_clicked(move |idx| {
             let i = idx as usize;
@@ -706,27 +867,93 @@ fn main() -> Result<(), slint::PlatformError> {
                     Some((pt.x, pt.y)),
                     false,
                 );
+                update_ui();
             }
         });
     }
 
-    // 10. Command Bar Actions
+    // 11. Command Bar Actions (New Folder, Rename, Delete, Cut, Copy, Paste, View, Panes)
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
 
         main_window.on_command_new_folder(move || {
             let (hwnd, curr) = {
                 let st = state.borrow();
                 (get_active_hwnd(), st.current_path.clone())
             };
-            if let Ok(_) = shell_interop::ops::create_new(
+
+            // Find an available "New folder" name
+            let mut candidate = "New folder".to_string();
+            let mut counter = 2;
+            while curr.join(&candidate).exists() {
+                candidate = format!("New folder ({counter})");
+                counter += 1;
+            }
+
+            if shell_interop::ops::create_new(
                 hwnd,
                 &curr.to_string_lossy(),
-                "New folder",
+                &candidate,
                 true,
-            ) {
+            )
+            .is_ok()
+            {
                 update_ui();
+                // Automatically select the newly created folder and open inline rename
+                if let Some(ui) = main_window_weak.upgrade() {
+                    let mut st = state.borrow_mut();
+                    if let Some(pos) = st.entries.iter().position(|e| e.name == candidate) {
+                        select_entry_and_update_panes(&ui, &mut st, pos);
+                        ui.set_rename_text(candidate.into());
+                        ui.set_is_renaming(true);
+                    }
+                }
+            }
+        });
+    }
+
+    {
+        let state = Rc::clone(&state);
+        let main_window_weak = main_window.as_weak();
+
+        main_window.on_command_rename(move || {
+            let ui = match main_window_weak.upgrade() {
+                Some(w) => w,
+                None => return,
+            };
+            let st = state.borrow();
+            if let Some(idx) = st.selected_idx {
+                if let Some(entry) = st.entries.get(idx) {
+                    ui.set_rename_text(entry.name.clone().into());
+                    ui.set_is_renaming(true);
+                }
+            }
+        });
+    }
+
+    {
+        let state = Rc::clone(&state);
+        let update_ui = update_ui.clone();
+
+        main_window.on_command_commit_rename(move |new_name| {
+            let trimmed = new_name.trim();
+            if trimmed.is_empty() {
+                return;
+            }
+            let (hwnd, old_path_opt) = {
+                let st = state.borrow();
+                let p = st
+                    .selected_idx
+                    .and_then(|i| st.entries.get(i))
+                    .map(|e| e.path.clone());
+                (get_active_hwnd(), p)
+            };
+            if let Some(old_path) = old_path_opt {
+                if shell_interop::ops::rename(hwnd, &old_path, trimmed).is_ok() {
+                    update_ui();
+                }
             }
         });
     }
@@ -738,7 +965,10 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.on_command_delete(move || {
             let (hwnd, path_opt) = {
                 let st = state.borrow();
-                let p = st.selected_idx.and_then(|i| st.entries.get(i)).map(|e| e.path.clone());
+                let p = st
+                    .selected_idx
+                    .and_then(|i| st.entries.get(i))
+                    .map(|e| e.path.clone());
                 (get_active_hwnd(), p)
             };
             if let Some(p) = path_opt {
@@ -754,7 +984,10 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.on_command_copy(move || {
             let (hwnd, path_opt) = {
                 let st = state.borrow();
-                let p = st.selected_idx.and_then(|i| st.entries.get(i)).map(|e| e.path.clone());
+                let p = st
+                    .selected_idx
+                    .and_then(|i| st.entries.get(i))
+                    .map(|e| e.path.clone());
                 (get_active_hwnd(), p)
             };
             if let Some(p) = path_opt {
@@ -769,7 +1002,10 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.on_command_cut(move || {
             let (hwnd, path_opt) = {
                 let st = state.borrow();
-                let p = st.selected_idx.and_then(|i| st.entries.get(i)).map(|e| e.path.clone());
+                let p = st
+                    .selected_idx
+                    .and_then(|i| st.entries.get(i))
+                    .map(|e| e.path.clone());
                 (get_active_hwnd(), p)
             };
             if let Some(p) = path_opt {
@@ -785,15 +1021,18 @@ fn main() -> Result<(), slint::PlatformError> {
         main_window.on_command_paste(move || {
             let (hwnd, dest) = {
                 let st = state.borrow();
-                (get_active_hwnd(), st.current_path.to_string_lossy().to_string())
+                (
+                    get_active_hwnd(),
+                    st.current_path.to_string_lossy().to_string(),
+                )
             };
-            if let Ok((files, _is_cut)) = shell_interop::clipboard::get_files(hwnd) {
-                let _ = shell_interop::ops::transfer(
-                    hwnd,
-                    &files,
-                    &dest,
-                    shell_interop::ops::Transfer::Copy,
-                );
+            if let Ok((files, is_cut)) = shell_interop::clipboard::get_files(hwnd) {
+                let mode = if is_cut {
+                    shell_interop::ops::Transfer::Move
+                } else {
+                    shell_interop::ops::Transfer::Copy
+                };
+                let _ = shell_interop::ops::transfer(hwnd, &files, &dest, mode);
                 update_ui();
             }
         });
@@ -829,7 +1068,14 @@ fn main() -> Result<(), slint::PlatformError> {
             };
             let mut st = state.borrow_mut();
             st.show_preview = !st.show_preview;
+            if st.show_preview {
+                st.show_details = false;
+                ui.set_show_details(false);
+            }
             ui.set_show_preview(st.show_preview);
+            if let Some(sel) = st.selected_idx {
+                select_entry_and_update_panes(&ui, &mut st, sel);
+            }
         });
     }
 
@@ -844,7 +1090,14 @@ fn main() -> Result<(), slint::PlatformError> {
             };
             let mut st = state.borrow_mut();
             st.show_details = !st.show_details;
+            if st.show_details {
+                st.show_preview = false;
+                ui.set_show_preview(false);
+            }
             ui.set_show_details(st.show_details);
+            if let Some(sel) = st.selected_idx {
+                select_entry_and_update_panes(&ui, &mut st, sel);
+            }
         });
     }
 
@@ -873,18 +1126,50 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // 11. Tab Management
+    // 12. Keyboard Arrow Navigation
+    {
+        let state = Rc::clone(&state);
+        let main_window_weak = main_window.as_weak();
+
+        main_window.on_key_shortcut(move |action| {
+            let ui = match main_window_weak.upgrade() {
+                Some(w) => w,
+                None => return,
+            };
+            let mut st = state.borrow_mut();
+            let len = st.entries.len();
+            if len == 0 {
+                return;
+            }
+            let next_idx = match (action.as_str(), st.selected_idx) {
+                ("down", Some(curr)) => (curr + 1).min(len - 1),
+                ("down", None) => 0,
+                ("up", Some(curr)) => curr.saturating_sub(1),
+                ("up", None) => 0,
+                _ => return,
+            };
+            select_entry_and_update_panes(&ui, &mut st, next_idx);
+        });
+    }
+
+    // 13. Tab Management (Select, New Tab +, Close Tab)
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
 
         main_window.on_tab_selected(move |idx| {
             let i = idx as usize;
             let mut st = state.borrow_mut();
-            if i < st.tabs.len() {
+            if i < st.tabs.len() && i != st.active_tab_idx {
                 st.active_tab_idx = i;
                 st.current_path = st.tabs[i].path.clone();
+                st.history_back = st.tabs[i].history_back.clone();
+                st.history_forward = st.tabs[i].history_forward.clone();
                 drop(st);
+                if let Some(ui) = main_window_weak.upgrade() {
+                    ui.set_search_text("".into());
+                }
                 update_ui();
             }
         });
@@ -893,22 +1178,31 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let state = Rc::clone(&state);
         let update_ui = update_ui.clone();
+        let main_window_weak = main_window.as_weak();
 
         main_window.on_tab_new(move || {
             let mut st = state.borrow_mut();
-            let new_id = st.tabs.len() as i32;
+            let new_id = st.next_tab_id;
+            st.next_tab_id += 1;
             let path = st.current_path.clone();
             let title = path
                 .file_name()
                 .map(|f| f.to_string_lossy().to_string())
-                .unwrap_or_else(|| "This PC".to_string());
+                .unwrap_or_else(|| "Home".to_string());
             st.tabs.push(TabState {
                 id: new_id,
                 title,
                 path: path.clone(),
+                history_back: Vec::new(),
+                history_forward: Vec::new(),
             });
             st.active_tab_idx = st.tabs.len() - 1;
+            st.history_back.clear();
+            st.history_forward.clear();
             drop(st);
+            if let Some(ui) = main_window_weak.upgrade() {
+                ui.set_search_text("".into());
+            }
             update_ui();
         });
     }
@@ -925,7 +1219,10 @@ fn main() -> Result<(), slint::PlatformError> {
                 if st.active_tab_idx >= st.tabs.len() {
                     st.active_tab_idx = st.tabs.len() - 1;
                 }
-                st.current_path = st.tabs[st.active_tab_idx].path.clone();
+                let active = st.active_tab_idx;
+                st.current_path = st.tabs[active].path.clone();
+                st.history_back = st.tabs[active].history_back.clone();
+                st.history_forward = st.tabs[active].history_forward.clone();
                 drop(st);
                 update_ui();
             }
