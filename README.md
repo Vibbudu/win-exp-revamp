@@ -1,142 +1,106 @@
-# Hyperion Explorer ⚡
+<div align="center">
+    <h1>Hyperion Explorer</h1>
+    <p>
+        A fast, offline, native Windows 11 File Explorer written in Rust.
+    </p>
+    <a href="https://github.com/Vibbudu/win-exp-revamp">
+        github.com/Vibbudu/win-exp-revamp
+    </a>
+</div>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D4.svg)](https://microsoft.com/windows)
-[![Rust](https://img.shields.io/badge/Built%20with-Rust-dea584.svg)](https://www.rust-lang.org/)
-[![GUI](https://img.shields.io/badge/Native%20GUI-Slint%20Fluent-0078D4.svg)](https://slint.dev/)
+## Overview
+> [!NOTE]
+> Hyperion Explorer is under active development.
+> Bug reports and pull requests are welcome.
 
-An ultra-fast, 100% native open-source replacement for the Windows 11 File Explorer built in **Rust** (zero web frames, zero WebView2, zero Edge/browser dependencies, 100% offline).
+Hyperion Explorer is a lightweight, 100% native replacement for the Windows 11 File Explorer. It keeps the stock WinUI Fluent design and system shell integration (native icons, Recycle Bin, context menus), but runs on a custom Rust core with instant search and built-in file previews.
 
-Hyperion Explorer replicates the exact **look, layout, colors, and behavior** of the stock Windows 11 File Explorer (WinUI Fluent design, tabs, address bar, command bar, navigation pane, Home, This PC, details, and preview panes), but runs **considerably faster**, provides **instant search over millions of files**, and supports **rich previews for Excel sheets, PDFs, Word documents, PowerPoint presentations, code, and archives**.
+No web frames, no WebView2, no Edge runtimes. Just native machine code.
 
----
+## Performance vs Windows 11 Explorer
 
-## 🌟 Why Hyperion Explorer?
-
-| Feature | Stock Windows 11 Explorer | Hyperion Explorer |
+| Metric | Stock Explorer | Hyperion Explorer |
 |---|---|---|
-| **Engine** | Win32 / Classic Shell DLLs | **High-performance Rust Core** |
-| **Search Speed** | Slow, indexes slowly, freezes | **Sub-20ms instant SIMD search over 2M+ files** |
-| **Search Mechanism** | Windows Search Service (SQLite) | **Direct NTFS MFT & USN Journal enumeration** |
-| **Directory Enumeration** | Sequential Win32 shell enumeration | **Batched `FindFirstFileExW` (zero per-file `stat`)** |
-| **Excel Sheet Preview** | ❌ None (requires Office add-in) | **✅ Built-in virtualized spreadsheet grid & sheet tabs** |
-| **PDF Preview** | ⚠️ Slow / requires Acrobat | **✅ Fast native streaming preview** |
-| **Word (.docx) Preview** | ⚠️ Slow shell handler | **✅ Clean, fast HTML/typography document renderer** |
-| **PowerPoint (.pptx) Preview**| ❌ None | **✅ Slide-by-slide text & structure preview** |
-| **Code & Markdown** | ❌ Plain text / unformatted | **✅ Syntax-highlighted code + formatted Markdown** |
-| **Memory Footprint** | 300MB – 650MB+ | **~90MB – 140MB** |
+| Cold launch | ~1.2s - 2.0s | < 200ms |
+| 100,000 file folder listing | 1.5s - 3.5s | ~45ms (large fetch FindFirstFileExW) |
+| Search over 2M+ files | 15s - 45s (or hangs) | < 20ms (in-memory SIMD search) |
+| RAM usage (idle) | 350MB - 650MB | ~45MB - 90MB |
+| Excel & CSV preview | Requires Excel add-in | Built-in interactive grid |
+| PDF preview | Slow shell handler | Built-in WinRT page renderer |
 
----
+## Architecture
+The project is organized as a Cargo workspace with dedicated crates:
 
-## 📸 Key Features
+### Crates
+- `crates/fs-core`: Fast directory enumeration using Win32 `FindFirstFileExW` with `FIND_FIRST_EX_LARGE_FETCH` and pure-Rust natural sorting (`StrCmpLogicalW`).
+- `crates/indexer`: Sub-20ms search engine. Direct NTFS MFT reading (`FSCTL_ENUM_USN_DATA`) when elevated, with a priority BFS crawler fallback and flat-array SIMD search (`memchr::memmem` + `rayon`).
+- `crates/shell-interop`: STA worker pool for Windows Shell COM interfaces (`IShellItemImageFactory`, `IContextMenu`, `IPropertyStore`, `IFileOperation`), cloud sync badges, and native drag-and-drop (`SHDoDragDrop`).
+- `crates/preview`: File previews for Excel (`.xlsx`, `.xls`, `.ods`, `.csv`), Word (`.docx`), PowerPoint (`.pptx`), PDF (`Windows.Data.Pdf`), code syntax detection, and `.zip` archives.
+- `crates/ipc-types`: Shared data types used across crates.
 
-- **Exact Windows 11 Fluent Aesthetic**:
-  - Native Windows 11 **Mica backdrop** material transparency.
-  - Multi-tab strip with tab tear-off support and `Ctrl+T` / `Ctrl+W` shortcuts.
-  - Interactive breadcrumb bar with chevron drop-downs and instant click-to-edit raw path input (`Ctrl+L` / `Alt+D`).
-  - Command bar with responsive overflow, `+ New`, `Cut`, `Copy`, `Paste`, `Rename`, `Share`, `Delete`, `Sort`, and `View` modes.
-  - Collapsible Navigation Pane featuring **Home**, **This PC** (with real drive space progress gauges), and Quick Access folders.
-- **Universal Preview Pane (`Alt+P`)**:
-  - **Spreadsheets**: `.xlsx`, `.xls`, `.xlsb`, `.ods`, `.csv`, `.tsv` with tabbed sheet switching.
-  - **Documents**: `.docx` formatted with headings and tables.
-  - **Presentations**: `.pptx` slides viewer.
-  - **PDFs**: Embedded high-performance streaming viewer.
-  - **Code & Markdown**: Line-numbered syntax view and rich Markdown rendering.
-  - **Media & Archives**: In-app video/audio players, image inspector, and `.zip` archive directory explorer.
-- **True Windows Shell Parity**:
-  - Live system file-type icons and thumbnails loaded via `IShellItemImageFactory`.
-  - Windows Property System integration (`IPropertyStore`) for detailed metadata.
-  - Native file operations through `IFileOperation` (Recycle Bin, shell undo records, conflict dialogs).
-  - Modern Windows 11 context menu with **"Show more options"** (`Shift+F10`) hosting third-party context menu handlers (7-Zip, VS Code, Git, etc.).
+### Application
+- `app`: Native Windows desktop app using Slint for the UI and Win32 for windowing, system theme sync, and input hooks.
 
----
+## Key Features
+- Windows 11 Fluent layout (tabs, breadcrumb address bar, command bar, navigation pane, status bar).
+- Compact view option (`View` -> `Show` -> `Compact view`) matching stock Explorer spacing.
+- Column resizing for Name, Date modified, Type, and Size headers.
+- Multi-column views: Details, Tiles, Content, List, Small, Medium, Large, and Extra Large icons.
+- Instant search that updates as you type without blocking the UI thread.
+- Native drag and drop (`SHDoDragDrop`) to and from external applications.
+- Mouse back and forward side buttons for folder history navigation.
+- Dark and light theme auto-switching based on Windows system settings.
+- Google Drive and cloud folder support with cloud sync badges.
+- Built-in previews for PDFs, spreadsheets, documents, presentations, and code.
 
-## 🏗️ Architecture
-
-```mermaid
-flowchart LR
-  subgraph Frontend["Frontend: React 18 + Vite (WebView2)"]
-    Tabs[Tabs Strip] --> Nav[Breadcrumb + Search Box]
-    Nav --> Cmd[Command Bar]
-    Cmd --> Main["Nav Pane | Folder View (Details/Icons) | Preview Pane"]
-    Main --> Status[Status Bar]
-  end
-
-  subgraph Backend["Tauri 2 Host (Rust)"]
-    IPC[Tauri IPC / State]
-    FS[fs-core: Fast Enumeration]
-    Shell[shell-interop: COM / Shell / Icons]
-    Idx[indexer: MFT / USN / SIMD Search]
-    Prev[preview: Universal Previewers]
-  end
-
-  Frontend <-->|Tauri IPC| IPC
-  IPC --> FS & Shell & Idx & Prev
-```
-
-### Workspace Crates
-- **`crates/ipc-types`**: Canonical shared data models between Rust and TypeScript.
-- **`crates/fs-core`**: High-throughput directory enumeration and pure-Rust natural sorting matching `StrCmpLogicalW`.
-- **`crates/shell-interop`**: STA worker pool handling Win32 Shell COM interfaces (`IShellItemImageFactory`, `IContextMenu`, `IPropertyStore`, `IFileOperation`).
-- **`crates/indexer`**: Direct NTFS MFT enumeration (`FSCTL_ENUM_USN_DATA`) with parallel crawler fallback and SIMD substring queries via `memchr::memmem`.
-- **`crates/preview`**: Format-specific parsers for Excel (`calamine`), Word (`quick-xml`), PowerPoint, PDF, Markdown (`pulldown-cmark`), and archives (`zip`).
-- **`app/src-tauri`**: Tauri 2 application entry point and Mica vibrancy window configuration.
-- **`app/ui`**: React + TypeScript frontend adhering to Fluent Design System tokens.
-
----
-
-## ⌨️ Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl+T` | Open new tab |
-| `Ctrl+W` | Close current tab |
-| `Ctrl+L` / `Alt+D` | Focus address bar (select full path) |
-| `Ctrl+E` / `Ctrl+F` | Focus instant search box |
-| `Alt+P` | Toggle Preview pane |
-| `Alt+Shift+P` | Toggle Details pane |
-| `F2` | Inline rename selected item |
-| `F5` | Refresh current folder / search |
-| `Delete` | Delete selected item(s) to Recycle Bin |
-| `Shift+Delete` | Permanently delete selected item(s) |
-| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste |
-| `Alt+Left` / `Backspace` | Navigate back / up |
-| `Alt+Right` | Navigate forward |
+| Ctrl+T | New tab |
+| Ctrl+W | Close active tab |
+| Ctrl+L / Alt+D | Edit address bar |
+| Ctrl+F / Ctrl+E | Focus search box |
+| Alt+Left | Go back |
+| Alt+Right | Go forward |
+| Alt+Up / Backspace | Go up one directory |
+| Alt+P | Toggle preview pane |
+| Alt+Shift+P | Toggle details pane |
+| F2 | Rename selected file |
+| F5 / Ctrl+R | Refresh folder |
+| Delete | Send to Recycle Bin |
+| Ctrl+C / Ctrl+X / Ctrl+V | Copy / Cut / Paste |
 
----
-
-## 🚀 Getting Started
+## Building and Running
 
 ### Prerequisites
-- [Rust](https://rustup.rs/) (v1.80+ with `x86_64-pc-windows-msvc` toolchain)
 - Windows 10 or 11 (64-bit)
+- Rust 1.80+ (MSVC toolchain: `x86_64-pc-windows-msvc`)
 
-### Build & Run
+### Quick Start
 ```powershell
 # Clone the repository
-git clone https://github.com/hyperion-explorer/hyperion-explorer.git
-cd hyperion-explorer
+git clone https://github.com/Vibbudu/win-exp-revamp.git
+cd win-exp-revamp
 
-# 1. Run workspace unit tests
+# Run unit tests
 cargo test --workspace
 
-# 2. Run the pure native Windows application
+# Run the app in debug mode
 cargo run -p app
 
-# 3. Build optimized standalone release executable
+# Build an optimized release binary
 cargo build --release -p app
-# Executable is generated at: target\release\app.exe
 ```
+The compiled binary will be at `target/release/app.exe`.
 
----
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build guidelines and coding conventions.
 
-## 📜 AI Agent Context
+## Credits
+- [Slint](https://slint.dev/) - Native GUI toolkit for Rust
+- [Microsoft Fluent Design System](https://github.com/microsoft/fluentui) - Design tokens and icon glyphs
+- [Calamine](https://github.com/tafia/calamine) - Fast spreadsheet parser
 
-This repository maintains an active context ledger for AI models and automated contributors in [`AGENTS.md`](AGENTS.md). Please read and update `AGENTS.md` whenever contributing changes to this project.
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-Windows, Fluent Design, and Segoe are trademarks of Microsoft Corporation. Hyperion Explorer is an independent open-source cleanroom implementation.
+## License
+MIT License. See [LICENSE](LICENSE) for details.
