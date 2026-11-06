@@ -25,9 +25,9 @@ pub enum ImageMode {
     ThumbnailOnly,
 }
 
-/// Render the shell image for `path` (a filesystem path or a `::{CLSID}` parsing name)
-/// at `size`×`size` pixels and return PNG bytes. Must run on an STA thread.
-pub fn shell_image_png(path: &str, size: u32, mode: ImageMode) -> Result<Vec<u8>> {
+/// Render the shell image for `path` at `size`×`size` pixels and return `(width, height, rgba_bytes)`.
+/// Must run on an STA thread.
+pub fn shell_image_rgba(path: &str, size: u32, mode: ImageMode) -> Result<(u32, u32, Vec<u8>)> {
     let w = wide(path);
     let factory: IShellItemImageFactory = unsafe { SHCreateItemFromParsingName(PCWSTR(w.as_ptr()), None)? };
     let flags: SIIGBF = match mode {
@@ -37,14 +37,30 @@ pub fn shell_image_png(path: &str, size: u32, mode: ImageMode) -> Result<Vec<u8>
     };
     let sz = SIZE { cx: size as i32, cy: size as i32 };
     let hbmp = unsafe { factory.GetImage(sz, flags)? };
-    let res = hbitmap_to_png(hbmp);
+    let res = hbitmap_to_rgba(hbmp);
     unsafe {
         let _ = DeleteObject(HGDIOBJ(hbmp.0));
     }
     res
 }
 
-fn hbitmap_to_png(hbmp: HBITMAP) -> Result<Vec<u8>> {
+/// Render the shell image for `path` (a filesystem path or a `::{CLSID}` parsing name)
+/// at `size`×`size` pixels and return PNG bytes. Must run on an STA thread.
+pub fn shell_image_png(path: &str, size: u32, mode: ImageMode) -> Result<Vec<u8>> {
+    let (w, h, buf) = shell_image_rgba(path, size, mode)?;
+    let mut out = Vec::with_capacity(buf.len() / 3);
+    {
+        let mut enc = png::Encoder::new(&mut out, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.set_compression(png::Compression::Fast);
+        let mut writer = enc.write_header()?;
+        writer.write_image_data(&buf)?;
+    }
+    Ok(out)
+}
+
+fn hbitmap_to_rgba(hbmp: HBITMAP) -> Result<(u32, u32, Vec<u8>)> {
     let mut bm = BITMAP::default();
     let got = unsafe {
         GetObjectW(HGDIOBJ(hbmp.0), std::mem::size_of::<BITMAP>() as i32, Some(&mut bm as *mut _ as *mut _))
@@ -91,16 +107,7 @@ fn hbitmap_to_png(hbmp: HBITMAP) -> Result<Vec<u8>> {
             p[2] = un(b);
         }
     }
-    let mut out = Vec::with_capacity(buf.len() / 3);
-    {
-        let mut enc = png::Encoder::new(&mut out, w as u32, h as u32);
-        enc.set_color(png::ColorType::Rgba);
-        enc.set_depth(png::BitDepth::Eight);
-        enc.set_compression(png::Compression::Fast);
-        let mut writer = enc.write_header()?;
-        writer.write_image_data(&buf)?;
-    }
-    Ok(out)
+    Ok((w as u32, h as u32, buf))
 }
 
 /// Extensions whose icon differs per file, so they cannot be cached by extension.

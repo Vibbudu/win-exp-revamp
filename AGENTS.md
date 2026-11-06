@@ -133,6 +133,29 @@ cargo run -p app
 
 ## 7. Chronological Change Log
 
+### [2026-11-06] — Window Drag Fix, Google Drive Stability, PDF Visual+Text Previews, Dark Context Menu, Auto Dark/Light Theme, Command Bar Flyouts & NAS Support
+- **Author/Model**: Gemini (High) / Antigravity Pair Programmer
+- **Description**:
+  1. **Fixed Titlebar Drag Mouse-Capture Trap**: Posted `WM_LBUTTONUP` immediately after `SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)` returns so Slint releases its internal `TouchArea` pointer grab after moving the window.
+  2. **Fixed Google Drive (`G:\My Drive`) Crash**:
+     - Eliminated holding `RefCell::borrow_mut()` across filesystem (`fs_core::list_dir`), preview, or Shell COM calls, and moved `IPropertyStore` and `IShellItemImageFactory` queries onto the background `StaPool` (`select_entry_safe`). This prevents re-entrant `BorrowMutError` panics when Google Drive's `GoogleDriveFS.exe` COM handler pumps the Windows STA message loop.
+     - Fixed the civil date calculation in `format_mtime` (`doe / 1460 + doe / 36524 - doe / 146096` with saturating subtraction) and added unit tests across leap-year and March 1st boundaries.
+     - Added first-class icon and preview support for Google Drive `.gdoc`, `.gsheet`, `.gslides`, and `.gform` pointer files.
+  3. **Real PDF & Image Previews (`crates/preview/src/pdf.rs` & `shell_image_rgba`)**:
+     - Added pure-Rust PDF stream decompression (`/FlateDecode`), `ToUnicode` CMap decoding (`beginbfchar`/`beginbfrange`), and `BT`..`ET` text extraction in `crates/preview/src/pdf.rs`.
+     - Added `shell_interop::icons::shell_image_rgba` to render high-resolution PDF first-page previews and image thumbnails directly into Slint `Image` buffers in both the Preview and Details panes.
+  4. **Native Dark Mode Context Menu & Auto OS Dark/Light Theme**:
+     - Implemented `shell_interop::system::is_dark_mode()` (`HKCU\...\Personalize\AppsUseLightTheme`) and `apply_window_theme(hwnd, dark)` using `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE)` and `uxtheme.dll` ordinals `133`, `135` (`SetPreferredAppMode`), and `136` (`FlushMenuThemes`).
+     - Added `"Open in new tab"` and `"Open in new window"` items to folder right-click context menus (`crates/shell-interop/src/context_menu.rs`).
+     - Built a dynamic `Theme` global in `app/ui/main.slint` polled every 2s so switching Windows 11 between Dark Mode and Light Mode updates the entire UI and native menus automatically.
+  5. **Command Bar Flyouts (`+ New`, `Sort`, `View`), Inline Row Rename, NAS Networking & Larger Typography**:
+     - Built floating Windows 11 flyout menus for `+ New`, `Sort` (`Name`, `Date modified`, `Type`, `Size`, `Ascending`, `Descending`), and `View` (`Extra large icons`, `Large icons`, `Medium-sized icons`, `Small icons`, `List`, `Details`, `Tiles`, `Content`, `Details pane`, `Preview pane`, `Hidden items`).
+     - Moved `F2` / `Rename` inline into the selected file row.
+     - Added `Network` view (`WNetOpenEnumW` / `WNetEnumResourceW`) and native Windows `Map network drive` (`WNetConnectionDialog`) for NAS / SMB share connectivity (`\\server\share`).
+     - Upgraded typography (`14px` breadcrumbs, sidebar, and file rows; `13.5px` command bar; `13px` metadata) and high-contrast colors.
+- **Files Created/Modified**:
+  - `Cargo.toml`, `crates/shell-interop/src/system.rs`, `crates/shell-interop/src/context_menu.rs`, `crates/shell-interop/src/icons.rs`, `crates/shell-interop/src/info.rs`, `crates/preview/Cargo.toml`, `crates/preview/src/pdf.rs`, `crates/preview/src/lib.rs`, `app/ui/main.slint`, `app/src/main.rs`, `AGENTS.md`.
+
 ### [2026-11-06] — 1:1 Windows 11 Frameless Replica UI, Segoe Fluent Icons & Instant Priority Search
 - **Author/Model**: Gemini (High) / Antigravity Pair Programmer
 - **Description**:

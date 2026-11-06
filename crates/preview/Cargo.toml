@@ -13,5 +13,7 @@ calamine = { workspace = true }
 zip = { workspace = true }
 quick-xml = { workspace = true }
 pulldown-cmark = { workspace = true }
+serde_json = { workspace = true }
+flate2 = "1"
 anyhow = { workspace = true }
 log = { workspace = true }

@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod docx;
 pub mod excel;
+pub mod pdf;
 pub mod pptx;
 pub mod text;
 
@@ -34,9 +35,36 @@ pub fn generate_preview(path: &str) -> Preview {
         return Preview::Image;
     }
 
-    // 2. PDF
+    // 2. PDF (extracts real text & metadata + visual thumbnail rendered in UI)
     if ext == "pdf" {
+        if let Ok(res) = pdf::preview_pdf(path) {
+            return res;
+        }
         return Preview::Pdf;
+    }
+
+    // 2b. Google Drive Cloud Pointer Files (.gdoc, .gsheet, .gslides, .gform)
+    if matches!(ext.as_str(), "gdoc" | "gsheet" | "gslides" | "gform") {
+        if let Ok(raw) = std::fs::read_to_string(path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
+                let kind_label = match ext.as_str() {
+                    "gdoc" => "Google Docs Document",
+                    "gsheet" => "Google Sheets Spreadsheet",
+                    "gslides" => "Google Slides Presentation",
+                    _ => "Google Forms Survey",
+                };
+                let url = val.get("url").and_then(|v| v.as_str()).unwrap_or("(Cloud URL)");
+                let doc_id = val.get("doc_id").and_then(|v| v.as_str()).unwrap_or("-");
+                let email = val.get("email").and_then(|v| v.as_str()).unwrap_or("-");
+                return Preview::Text {
+                    content: format!(
+                        "{kind_label}\n────────────────────────────────────────\n\nDocument ID:\n{doc_id}\n\nAccount:\n{email}\n\nWeb Link (double-click file to open in browser):\n{url}"
+                    ),
+                    language: "text".into(),
+                    truncated: false,
+                };
+            }
+        }
     }
 
     // 3. Excel & Spreadsheets

@@ -3,8 +3,13 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use ipc_types::{DriveInfo, NamedPath, RecentItem};
+use ipc_types::{ATTR_DIRECTORY, DriveInfo, Entry, NamedPath, RecentItem};
 use parking_lot::Mutex;
+use windows::Win32::Foundation::HWND;
+use windows::Win32::NetworkManagement::WNet::{
+    NETRESOURCEW, RESOURCE_CONNECTED, RESOURCE_REMEMBERED, RESOURCETYPE_DISK, WNetCloseEnum,
+    WNetConnectionDialog, WNetEnumResourceW, WNetOpenEnumW,
+};
 use windows::Win32::Storage::FileSystem::{
     FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, FILE_FLAGS_AND_ATTRIBUTES, GetDiskFreeSpaceExW,
     GetDriveTypeW, GetLogicalDriveStringsW, GetVolumeInformationW,
@@ -163,4 +168,93 @@ pub fn recent_items(limit: usize) -> Vec<RecentItem> {
         out.push(RecentItem { name: meta.name, path: target, is_dir: meta.is_dir, accessed: e.modified, location });
     }
     out
+}
+
+/// Enumerate connected and remembered SMB / NAS network shares (`\\server\share`) and mapped network drives.
+pub fn network_resources() -> Vec<Entry> {
+    let mut results = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // 1. Include mapped network drives from logical drives
+    for d in drives() {
+        if d.kind == "network" || d.file_system.eq_ignore_ascii_case("drivefs") {
+            seen.insert(d.path.to_lowercase());
+            results.push(Entry {
+                name: d.label.clone(),
+                path: d.path,
+                is_dir: true,
+                size: d.total,
+                modified: 0,
+                created: 0,
+                attrs: ATTR_DIRECTORY,
+                type_name: format!("Network / Cloud Drive ({})", d.file_system),
+                ext: String::new(),
+            });
+        }
+    }
+
+    // 2. Enumerate connected & remembered WNet SMB/NAS disk shares
+    for scope in [RESOURCE_CONNECTED, RESOURCE_REMEMBERED] {
+        unsafe {
+            let mut handle = Default::default();
+            if WNetOpenEnumW(scope, RESOURCETYPE_DISK, Default::default(), None, &mut handle).is_ok() {
+                let mut buf = vec![0u8; 16384];
+                let mut count = u32::MAX;
+                let mut buf_size = buf.len() as u32;
+                if WNetEnumResourceW(
+                    handle,
+                    &mut count,
+                    buf.as_mut_ptr() as *mut _,
+                    &mut buf_size,
+                )
+                .is_ok()
+                {
+                    let slice = std::slice::from_raw_parts(
+                        buf.as_ptr() as *const NETRESOURCEW,
+                        count as usize,
+                    );
+                    for nr in slice {
+                        let remote = if !nr.lpRemoteName.is_null() {
+                            nr.lpRemoteName.to_string().unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
+                        let local = if !nr.lpLocalName.is_null() {
+                            nr.lpLocalName.to_string().unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
+                        if !remote.is_empty() && seen.insert(remote.to_lowercase()) {
+                            let display = if !local.is_empty() {
+                                format!("{remote} ({local})")
+                            } else {
+                                remote.clone()
+                            };
+                            results.push(Entry {
+                                name: display,
+                                path: remote,
+                                is_dir: true,
+                                size: 0,
+                                modified: 0,
+                                created: 0,
+                                attrs: ATTR_DIRECTORY,
+                                type_name: "Network Share (SMB / NAS)".into(),
+                                ext: String::new(),
+                            });
+                        }
+                    }
+                }
+                let _ = WNetCloseEnum(handle);
+            }
+        }
+    }
+
+    results
+}
+
+/// Opens the native Windows "Map Network Drive" dialog (`WNetConnectionDialog`) to connect to NAS / SMB shares.
+pub fn map_network_drive_dialog(hwnd: HWND) {
+    unsafe {
+        let _ = WNetConnectionDialog(hwnd, RESOURCETYPE_DISK.0);
+    }
 }

@@ -1,5 +1,30 @@
 import { LineEdit, ScrollView } from "std-widgets.slint";
 
+export global Theme {
+    in-out property <bool> is_dark: true;
+
+    out property <color> titlebar_bg: is_dark ? #141414 : #dfe3e8;
+    out property <color> nav_bg: is_dark ? #282828 : #f3f3f3;
+    out property <color> cmd_bg: is_dark ? #202020 : #f8f8f8;
+    out property <color> sidebar_bg: is_dark ? #191919 : #f0f2f5;
+    out property <color> content_bg: is_dark ? #191919 : #ffffff;
+    out property <color> pane_bg: is_dark ? #1e1e1e : #f7f8fa;
+    out property <color> input_bg: is_dark ? #1d1d1d : #ffffff;
+    out property <color> flyout_bg: is_dark ? #2b2b2b : #fcfcfc;
+
+    out property <color> border: is_dark ? #3a3a3a : #d0d5dd;
+    out property <color> divider: is_dark ? #2e2e2e : #e2e5ea;
+
+    out property <color> hover_bg: is_dark ? #343434 : #e4e7ec;
+    out property <color> row_hover: is_dark ? #262626 : #f1f5f9;
+    out property <color> row_selected: is_dark ? #2f3742 : #e0eefb;
+
+    out property <color> text_primary: is_dark ? #ffffff : #141414;
+    out property <color> text_secondary: is_dark ? #d4d4d4 : #424242;
+    out property <color> text_muted: is_dark ? #a0a0a0 : #686868;
+    out property <color> accent: is_dark ? #60cdff : #0067c0;
+}
+
 export struct EntryItem {
     id: string,
     name: string,
@@ -48,8 +73,8 @@ component FluentEntryIcon inherits Rectangle {
     in property <color> glyph_color: #cccccc;
     in property <bool> large: false;
 
-    width: large ? 52px : 20px;
-    height: large ? 42px : 18px;
+    width: large ? 54px : 22px;
+    height: large ? 44px : 19px;
     background: transparent;
 
     // Back tab of Windows 11 folder
@@ -66,8 +91,8 @@ component FluentEntryIcon inherits Rectangle {
     if root.is_dir: Rectangle {
         x: large ? 2px : 1px;
         y: large ? 7px : 4px;
-        width: large ? 48px : 18px;
-        height: large ? 30px : 12px;
+        width: large ? 50px : 20px;
+        height: large ? 32px : 13px;
         border-radius: large ? 4px : 2px;
         background: #e3a414;
     }
@@ -76,17 +101,17 @@ component FluentEntryIcon inherits Rectangle {
     if root.is_dir: Rectangle {
         x: large ? 2px : 1px;
         y: large ? 11px : 6px;
-        width: large ? 48px : 18px;
-        height: large ? 27px : 10px;
+        width: large ? 50px : 20px;
+        height: large ? 29px : 11px;
         border-radius: large ? 4px : 2px;
-        background: @linear-gradient(180deg, #ffd75e 0%, #f5ba18 100%);
+        background: @linear-gradient(180deg, #ffe074 0%, #f5ba18 100%);
     }
 
     // Non-directory file icon using Segoe Fluent Icons
     if !root.is_dir: Text {
         text: root.glyph;
         font-family: "Segoe Fluent Icons";
-        font-size: large ? 34px : 15px;
+        font-size: large ? 36px : 16px;
         color: root.glyph_color;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -97,19 +122,19 @@ component FluentIconButton inherits Rectangle {
     in property <string> icon;
     in property <bool> is_active: false;
     in property <bool> is_disabled: false;
-    in property <color> icon_color: #e0e0e0;
     callback clicked();
 
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 4px;
-    background: is_disabled ? transparent : (touch.pressed ? #292929 : (touch.has-hover ? #333333 : (is_active ? #2f2f2f : transparent)));
+    background: is_disabled ? transparent : (touch.pressed ? Theme.divider : (touch.has-hover ? Theme.hover_bg : (is_active ? Theme.hover_bg : transparent)));
 
     Text {
         text: root.icon;
         font-family: "Segoe Fluent Icons";
-        font-size: 13px;
-        color: is_disabled ? #5a5a5a : (touch.has-hover ? #ffffff : root.icon_color);
+        font-size: 14px;
+        color: is_disabled ? Theme.text_muted : Theme.text_primary;
+        opacity: is_disabled ? 0.45 : 1.0;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -127,13 +152,13 @@ component CaptionButton inherits Rectangle {
 
     width: 46px;
     height: 32px;
-    background: touch.has-hover ? (root.is_close ? #c42b1c : #2d2d2d) : transparent;
+    background: touch.has-hover ? (root.is_close ? #c42b1c : Theme.hover_bg) : transparent;
 
     Text {
         text: root.icon;
         font-family: "Segoe Fluent Icons";
         font-size: 10px;
-        color: touch.has-hover ? #ffffff : #cccccc;
+        color: touch.has-hover ? (root.is_close ? #ffffff : Theme.text_primary) : Theme.text_secondary;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -146,46 +171,49 @@ component CaptionButton inherits Rectangle {
 component CommandBarButton inherits Rectangle {
     in property <string> icon;
     in property <string> label: "";
-    in property <color> icon_tint: #d8d8d8;
+    in property <color> icon_tint: Theme.text_primary;
     in property <bool> is_active: false;
     in property <bool> has_dropdown: false;
     in property <bool> is_disabled: false;
     callback clicked();
 
-    height: 34px;
-    min-width: root.label == "" ? 36px : 68px;
-    border-radius: 4px;
-    background: is_disabled ? transparent : (touch.pressed ? #282828 : (touch.has-hover ? #2f2f2f : (is_active ? #2c2c2c : transparent)));
+    height: 36px;
+    min-width: root.label == "" ? 38px : 74px;
+    border-radius: 5px;
+    background: is_disabled ? transparent : (touch.pressed ? Theme.divider : (touch.has-hover ? Theme.hover_bg : (is_active ? Theme.hover_bg : transparent)));
     border-width: is_active ? 1px : 0px;
-    border-color: #3d3d3d;
+    border-color: Theme.border;
 
     HorizontalLayout {
-        padding-left: root.label == "" ? 9px : 10px;
-        padding-right: root.label == "" ? 9px : 10px;
-        spacing: 7px;
+        padding-left: root.label == "" ? 10px : 11px;
+        padding-right: root.label == "" ? 10px : 11px;
+        spacing: 8px;
 
         Text {
             text: root.icon;
             font-family: "Segoe Fluent Icons";
-            font-size: 15px;
+            font-size: 16px;
             vertical-alignment: center;
             horizontal-alignment: center;
-            color: is_disabled ? #555555 : root.icon_tint;
+            color: is_disabled ? Theme.text_muted : root.icon_tint;
+            opacity: is_disabled ? 0.4 : 1.0;
         }
 
         if root.label != "": Text {
             text: root.label;
-            font-size: 12px;
+            font-size: 13.5px;
+            font-weight: 500;
             vertical-alignment: center;
-            color: is_disabled ? #555555 : #e6e6e6;
+            color: is_disabled ? Theme.text_muted : Theme.text_primary;
+            opacity: is_disabled ? 0.4 : 1.0;
         }
 
         if root.has_dropdown: Text {
             text: "\u{E70D}";
             font-family: "Segoe Fluent Icons";
-            font-size: 9px;
+            font-size: 10px;
             vertical-alignment: center;
-            color: #999999;
+            color: Theme.text_secondary;
         }
     }
 
@@ -195,34 +223,37 @@ component CommandBarButton inherits Rectangle {
     }
 }
 
-component NavItem inherits Rectangle {
-    in property <string> icon;
-    in property <color> icon_color: #60cdff;
+component FlyoutMenuItem inherits Rectangle {
     in property <string> label;
-    in property <bool> is_selected: false;
-    in property <bool> is_pinned: false;
+    in property <string> icon: "";
+    in property <color> icon_color: Theme.text_primary;
+    in property <bool> is_checked: false;
+    in property <bool> has_chevron: false;
     callback clicked();
 
     height: 34px;
     border-radius: 4px;
-    background: is_selected ? #2c2c2c : (touch.has-hover ? #242424 : transparent);
-
-    // Windows 11 left accent selection indicator pill
-    if root.is_selected: Rectangle {
-        x: 2px;
-        y: 9px;
-        width: 3px;
-        height: 16px;
-        border-radius: 1.5px;
-        background: #60cdff;
-    }
+    background: touch.has-hover ? Theme.hover_bg : transparent;
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 10px;
-        spacing: 12px;
+        padding-left: 10px;
+        padding-right: 12px;
+        spacing: 10px;
 
-        Text {
+        // Bullet indicator column (matches Windows 11 Sort/View flyout screenshots)
+        Rectangle {
+            width: 12px;
+            if root.is_checked: Rectangle {
+                width: 5px;
+                height: 5px;
+                x: 3px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 2.5px;
+                background: Theme.text_primary;
+            }
+        }
+
+        if root.icon != "": Text {
             width: 18px;
             text: root.icon;
             font-family: "Segoe Fluent Icons";
@@ -235,10 +266,72 @@ component NavItem inherits Rectangle {
         Text {
             horizontal-stretch: 1;
             text: root.label;
-            font-size: 13px;
+            font-size: 13.5px;
+            color: Theme.text_primary;
             vertical-alignment: center;
             horizontal-alignment: left;
-            color: is_selected ? #ffffff : #dcdcdc;
+        }
+
+        if root.has_chevron: Text {
+            width: 12px;
+            text: "\u{E76C}";
+            font-family: "Segoe Fluent Icons";
+            font-size: 10px;
+            color: Theme.text_secondary;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> icon;
+    in property <color> icon_color: #60cdff;
+    in property <string> label;
+    in property <bool> is_selected: false;
+    in property <bool> is_pinned: false;
+    callback clicked();
+
+    height: 36px;
+    border-radius: 5px;
+    background: is_selected ? Theme.row_selected : (touch.has-hover ? Theme.row_hover : transparent);
+
+    // Windows 11 left accent selection indicator pill
+    if root.is_selected: Rectangle {
+        x: 2px;
+        y: 9px;
+        width: 3px;
+        height: 18px;
+        border-radius: 1.5px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 12px;
+
+        Text {
+            width: 20px;
+            text: root.icon;
+            font-family: "Segoe Fluent Icons";
+            font-size: 16px;
+            color: root.icon_color;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.label;
+            font-size: 14px;
+            font-weight: is_selected ? 600 : 400;
+            vertical-alignment: center;
+            horizontal-alignment: left;
+            color: Theme.text_primary;
             overflow: elide;
         }
 
@@ -246,8 +339,8 @@ component NavItem inherits Rectangle {
             width: 14px;
             text: "\u{E718}";
             font-family: "Segoe Fluent Icons";
-            font-size: 10px;
-            color: #6e6e6e;
+            font-size: 11px;
+            color: Theme.text_muted;
             vertical-alignment: center;
             horizontal-alignment: center;
         }
@@ -263,11 +356,14 @@ export component MainWindow inherits Window {
     no-frame: true;
     min-width: 1080px;
     min-height: 680px;
-    preferred-width: 1280px;
-    preferred-height: 780px;
-    background: #191919;
+    preferred-width: 1320px;
+    preferred-height: 800px;
+    background: Theme.content_bg;
     default-font-family: "Segoe UI Variable Text";
     forward-focus: key_scope;
+
+    // Theme synchronization with Windows 11 OS settings
+    in-out property <bool> is_dark_mode <=> Theme.is_dark;
 
     // State properties
     in-out property <[TabItem]> tabs: [];
@@ -279,6 +375,10 @@ export component MainWindow inherits Window {
     in-out property <string> raw_path_text: "";
     in-out property <bool> is_editing_path: false;
     in-out property <string> search_text: "";
+
+    // Flyout menu state ("", "new", "sort", "view")
+    in-out property <string> active_flyout: "";
+    in-out property <bool> show_hidden: true;
 
     // Inline Rename state
     in-out property <bool> is_renaming: false;
@@ -292,18 +392,20 @@ export component MainWindow inherits Window {
     in-out property <int> selected_index: -1;
     in-out property <string> selected_path: "";
 
-    in-out property <string> view_mode: "details";
+    in-out property <string> view_mode: "details"; // "details", "icons", "xl_icons", "tiles", "list"
     in-out property <string> sort_column: "name";
     in-out property <bool> sort_asc: true;
 
     in-out property <bool> show_preview: false;
     in-out property <bool> show_details: false;
 
-    // Preview state
+    // Preview & Thumbnail Image state
     in-out property <string> preview_type: "none";
     in-out property <string> preview_title: "";
     in-out property <string> preview_subtitle: "";
     in-out property <string> preview_text_content: "";
+    in-out property <bool> has_preview_image: false;
+    in-out property <image> preview_image;
     in-out property <[string]> preview_table_headers: [];
     in-out property <[PreviewRow]> preview_table_rows: [];
 
@@ -314,7 +416,7 @@ export component MainWindow inherits Window {
     in-out property <string> status_item_count: "0 items";
     in-out property <string> status_selection_info: "";
 
-    // Window management callbacks (frameless custom titlebar)
+    // Window management callbacks
     callback window_minimize();
     callback window_maximize();
     callback window_close();
@@ -340,6 +442,8 @@ export component MainWindow inherits Window {
 
     // Command bar callbacks
     callback command_new_folder();
+    callback command_new_file(string);
+    callback command_map_network_drive();
     callback command_cut();
     callback command_copy();
     callback command_paste();
@@ -347,9 +451,12 @@ export component MainWindow inherits Window {
     callback command_commit_rename(string);
     callback command_delete();
     callback command_toggle_view();
+    callback command_set_view(string);
     callback command_toggle_preview();
     callback command_toggle_details();
+    callback command_toggle_hidden();
     callback sort_by(string);
+    callback sort_direction(bool);
 
     // Keyboard shortcut callback
     callback key_shortcut(string);
@@ -452,7 +559,9 @@ export component MainWindow inherits Window {
                 return accept;
             }
             if event.text == Key.Escape {
-                if root.is_editing_path {
+                if root.active_flyout != "" {
+                    root.active_flyout = "";
+                } else if root.is_editing_path {
                     root.is_editing_path = false;
                 } else if root.is_renaming {
                     root.is_renaming = false;
@@ -469,9 +578,9 @@ export component MainWindow inherits Window {
         Rectangle {
             width: 100%;
             height: 100%;
-            background: #191919;
+            background: Theme.content_bg;
             border-width: 1px;
-            border-color: #303030;
+            border-color: Theme.border;
 
             VerticalLayout {
                 padding: 1px;
@@ -481,8 +590,8 @@ export component MainWindow inherits Window {
                 // 1. UNIFIED WINDOWS 11 TITLEBAR & TAB STRIP (NO TOP BORDER)
                 // =========================================================
                 Rectangle {
-                    height: 40px;
-                    background: #141414;
+                    height: 42px;
+                    background: Theme.titlebar_bg;
 
                     HorizontalLayout {
                         padding-left: 8px;
@@ -491,17 +600,17 @@ export component MainWindow inherits Window {
                         padding-bottom: 0px;
                         spacing: 0px;
 
-                        // Tabs Area (aligned to bottom of the 40px titlebar so active tab blends into row 2)
+                        // Tabs Area (aligned to bottom of the 42px titlebar so active tab blends into row 2)
                         HorizontalLayout {
                             padding-top: 8px;
-                            spacing: 2px;
+                            spacing: 3px;
 
                             for tab[idx] in root.tabs: Rectangle {
-                                width: 190px;
-                                height: 32px;
-                                border-top-left-radius: 7px;
-                                border-top-right-radius: 7px;
-                                background: tab.is_active ? #262626 : (tab_touch.has-hover ? #1f1f1f : transparent);
+                                width: 200px;
+                                height: 34px;
+                                border-top-left-radius: 8px;
+                                border-top-right-radius: 8px;
+                                background: tab.is_active ? Theme.nav_bg : (tab_touch.has-hover ? Theme.hover_bg : transparent);
 
                                 HorizontalLayout {
                                     padding-left: 12px;
@@ -519,9 +628,9 @@ export component MainWindow inherits Window {
                                     Text {
                                         horizontal-stretch: 1;
                                         text: tab.title;
-                                        font-size: 12px;
+                                        font-size: 13px;
                                         font-weight: tab.is_active ? 600 : 400;
-                                        color: tab.is_active ? #ffffff : #b0b0b0;
+                                        color: tab.is_active ? Theme.text_primary : Theme.text_secondary;
                                         vertical-alignment: center;
                                         horizontal-alignment: left;
                                         overflow: elide;
@@ -529,17 +638,17 @@ export component MainWindow inherits Window {
 
                                     // Tab Close Button
                                     Rectangle {
-                                        width: 22px;
-                                        height: 22px;
+                                        width: 24px;
+                                        height: 24px;
                                         y: (parent.height - self.height) / 2;
                                         border-radius: 4px;
-                                        background: close_touch.has-hover ? #383838 : transparent;
+                                        background: close_touch.has-hover ? Theme.hover_bg : transparent;
 
                                         Text {
                                             text: "\u{E8BB}";
                                             font-family: "Segoe Fluent Icons";
                                             font-size: 9px;
-                                            color: close_touch.has-hover ? #ffffff : #9a9a9a;
+                                            color: close_touch.has-hover ? Theme.text_primary : Theme.text_secondary;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
                                         }
@@ -551,7 +660,7 @@ export component MainWindow inherits Window {
                                 }
 
                                 tab_touch := TouchArea {
-                                    width: parent.width - 28px;
+                                    width: parent.width - 30px;
                                     height: parent.height;
                                     clicked => { root.tab_selected(idx); }
                                 }
@@ -561,15 +670,15 @@ export component MainWindow inherits Window {
                             Rectangle {
                                 width: 32px;
                                 height: 28px;
-                                y: 2px;
+                                y: 3px;
                                 border-radius: 5px;
-                                background: new_tab_touch.has-hover ? #252525 : transparent;
+                                background: new_tab_touch.has-hover ? Theme.hover_bg : transparent;
 
                                 Text {
                                     text: "\u{E710}";
                                     font-family: "Segoe Fluent Icons";
-                                    font-size: 11px;
-                                    color: new_tab_touch.has-hover ? #ffffff : #b0b0b0;
+                                    font-size: 12px;
+                                    color: Theme.text_primary;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
@@ -583,7 +692,7 @@ export component MainWindow inherits Window {
                         // Draggable Titlebar Region
                         Rectangle {
                             horizontal-stretch: 1;
-                            height: 40px;
+                            height: 42px;
                             background: transparent;
 
                             TouchArea {
@@ -599,7 +708,7 @@ export component MainWindow inherits Window {
                         // Top-Right Windows 11 Caption Controls (Minimize, Maximize, Close)
                         HorizontalLayout {
                             spacing: 0px;
-                            padding-bottom: 8px;
+                            padding-bottom: 10px;
 
                             CaptionButton {
                                 icon: "\u{E921}";
@@ -624,8 +733,8 @@ export component MainWindow inherits Window {
                 // 2. NAVIGATION & BREADCRUMB ADDRESS BAR ROW
                 // =========================================================
                 Rectangle {
-                    height: 46px;
-                    background: #262626;
+                    height: 48px;
+                    background: Theme.nav_bg;
 
                     HorizontalLayout {
                         padding-left: 10px;
@@ -656,17 +765,17 @@ export component MainWindow inherits Window {
                             clicked => { root.nav_refresh(); }
                         }
 
-                        // Breadcrumb / Address Bar
+                        // Breadcrumb / Address Bar (Larger, Brighter 14px Typography)
                         Rectangle {
                             horizontal-stretch: 1;
-                            height: 32px;
-                            border-radius: 4px;
-                            background: #1d1d1d;
+                            height: 34px;
+                            border-radius: 5px;
+                            background: Theme.input_bg;
                             border-width: 1px;
-                            border-color: root.is_editing_path ? #60cdff : #383838;
+                            border-color: root.is_editing_path ? Theme.accent : Theme.border;
 
                             if !root.is_editing_path: HorizontalLayout {
-                                padding-left: 8px;
+                                padding-left: 10px;
                                 padding-right: 8px;
                                 padding-top: 3px;
                                 padding-bottom: 3px;
@@ -675,10 +784,10 @@ export component MainWindow inherits Window {
                                 // Computer / Root glyph
                                 Text {
                                     width: 20px;
-                                    text: "\u{EC4E}";
+                                    text: root.active_nav_key == "network" ? "\u{E774}" : "\u{EC4E}";
                                     font-family: "Segoe Fluent Icons";
-                                    font-size: 13px;
-                                    color: #bbbbbb;
+                                    font-size: 14px;
+                                    color: Theme.text_secondary;
                                     vertical-alignment: center;
                                     horizontal-alignment: center;
                                 }
@@ -687,8 +796,8 @@ export component MainWindow inherits Window {
                                     width: 14px;
                                     text: "\u{E76C}";
                                     font-family: "Segoe Fluent Icons";
-                                    font-size: 9px;
-                                    color: #777777;
+                                    font-size: 10px;
+                                    color: Theme.text_muted;
                                     vertical-alignment: center;
                                     horizontal-alignment: center;
                                 }
@@ -697,18 +806,19 @@ export component MainWindow inherits Window {
                                     spacing: 2px;
 
                                     Rectangle {
-                                        height: 24px;
-                                        border-radius: 3px;
-                                        background: crumb_touch.has-hover ? #2e2e2e : transparent;
+                                        height: 26px;
+                                        border-radius: 4px;
+                                        background: crumb_touch.has-hover ? Theme.hover_bg : transparent;
 
                                         HorizontalLayout {
-                                            padding-left: 6px;
-                                            padding-right: 6px;
+                                            padding-left: 7px;
+                                            padding-right: 7px;
 
                                             Text {
                                                 text: crumb.label;
-                                                font-size: 12px;
-                                                color: crumb_touch.has-hover ? #ffffff : #dedede;
+                                                font-size: 14px;
+                                                font-weight: c_idx == root.crumbs.length - 1 ? 600 : 400;
+                                                color: Theme.text_primary;
                                                 vertical-alignment: center;
                                             }
                                         }
@@ -722,14 +832,14 @@ export component MainWindow inherits Window {
                                         width: 14px;
                                         text: "\u{E76C}";
                                         font-family: "Segoe Fluent Icons";
-                                        font-size: 9px;
-                                        color: #777777;
+                                        font-size: 10px;
+                                        color: Theme.text_muted;
                                         vertical-alignment: center;
                                         horizontal-alignment: center;
                                     }
                                 }
 
-                                // Trailing empty space in address bar: click to edit raw path
+                                // Trailing empty space in address bar: click to edit raw path (or type \\nas\share)
                                 Rectangle {
                                     horizontal-stretch: 1;
                                     background: transparent;
@@ -748,6 +858,8 @@ export component MainWindow inherits Window {
 
                                 LineEdit {
                                     horizontal-stretch: 1;
+                                    font-size: 14px;
+                                    placeholder-text: "Enter folder path or \\\\server\\share...";
                                     text <=> root.raw_path_text;
                                     accepted(text) => {
                                         root.is_editing_path = false;
@@ -757,8 +869,8 @@ export component MainWindow inherits Window {
                                 }
 
                                 FluentIconButton {
-                                    width: 26px;
-                                    height: 26px;
+                                    width: 28px;
+                                    height: 28px;
                                     icon: "\u{E8BB}";
                                     clicked => {
                                         root.is_editing_path = false;
@@ -770,20 +882,21 @@ export component MainWindow inherits Window {
 
                         // Windows 11 Search Box
                         Rectangle {
-                            width: 270px;
-                            height: 32px;
-                            border-radius: 4px;
-                            background: #1d1d1d;
+                            width: 280px;
+                            height: 34px;
+                            border-radius: 5px;
+                            background: Theme.input_bg;
                             border-width: 1px;
-                            border-color: #383838;
+                            border-color: Theme.border;
 
                             HorizontalLayout {
                                 padding-left: 8px;
-                                padding-right: 8px;
+                                padding-right: 10px;
                                 spacing: 6px;
 
                                 search_input := LineEdit {
                                     horizontal-stretch: 1;
+                                    font-size: 13.5px;
                                     placeholder-text: "Search " + root.current_folder_name;
                                     text <=> root.search_text;
                                     edited(text) => {
@@ -799,13 +912,13 @@ export component MainWindow inherits Window {
                                     height: 22px;
                                     y: (parent.height - self.height) / 2;
                                     border-radius: 4px;
-                                    background: clear_search_touch.has-hover ? #333333 : transparent;
+                                    background: clear_search_touch.has-hover ? Theme.hover_bg : transparent;
 
                                     Text {
                                         text: "\u{E8BB}";
                                         font-family: "Segoe Fluent Icons";
                                         font-size: 9px;
-                                        color: #bbbbbb;
+                                        color: Theme.text_primary;
                                         horizontal-alignment: center;
                                         vertical-alignment: center;
                                     }
@@ -823,8 +936,8 @@ export component MainWindow inherits Window {
                                     width: 18px;
                                     text: "\u{E721}";
                                     font-family: "Segoe Fluent Icons";
-                                    font-size: 12px;
-                                    color: #999999;
+                                    font-size: 13px;
+                                    color: Theme.text_secondary;
                                     vertical-alignment: center;
                                     horizontal-alignment: center;
                                 }
@@ -834,14 +947,14 @@ export component MainWindow inherits Window {
                 }
 
                 // Subtle separator between Navigation Row and Command Bar
-                Rectangle { height: 1px; background: #2d2d2d; }
+                Rectangle { height: 1px; background: Theme.divider; }
 
                 // =========================================================
                 // 3. WINDOWS 11 COMMAND BAR
                 // =========================================================
                 Rectangle {
-                    height: 44px;
-                    background: #202020;
+                    height: 46px;
+                    background: Theme.cmd_bg;
 
                     HorizontalLayout {
                         padding-left: 10px;
@@ -852,17 +965,20 @@ export component MainWindow inherits Window {
 
                         CommandBarButton {
                             icon: "\u{E710}";
-                            icon_tint: #60cdff;
+                            icon_tint: Theme.accent;
                             label: "New";
                             has_dropdown: true;
-                            clicked => { root.command_new_folder(); }
+                            is_active: root.active_flyout == "new";
+                            clicked => {
+                                root.active_flyout = root.active_flyout == "new" ? "" : "new";
+                            }
                         }
 
                         Rectangle {
                             width: 1px;
-                            height: 20px;
+                            height: 22px;
                             y: 7px;
-                            background: #343434;
+                            background: Theme.divider;
                         }
 
                         CommandBarButton {
@@ -896,65 +1012,38 @@ export component MainWindow inherits Window {
 
                         Rectangle {
                             width: 1px;
-                            height: 20px;
+                            height: 22px;
                             y: 7px;
-                            background: #343434;
+                            background: Theme.divider;
                         }
 
                         CommandBarButton {
                             icon: "\u{E8CB}";
+                            icon_tint: Theme.accent;
                             label: "Sort";
                             has_dropdown: true;
-                            clicked => { root.sort_by(root.sort_column); }
+                            is_active: root.active_flyout == "sort";
+                            clicked => {
+                                root.active_flyout = root.active_flyout == "sort" ? "" : "sort";
+                            }
                         }
 
                         CommandBarButton {
                             icon: root.view_mode == "details" ? "\u{E8FD}" : "\u{E8A9}";
                             label: "View";
                             has_dropdown: true;
-                            clicked => { root.command_toggle_view(); }
+                            is_active: root.active_flyout == "view";
+                            clicked => {
+                                root.active_flyout = root.active_flyout == "view" ? "" : "view";
+                            }
                         }
 
-                        // Inline Rename Input Bar (appears when F2 or Rename is clicked)
-                        if root.is_renaming: HorizontalLayout {
-                            spacing: 6px;
-                            padding-left: 8px;
-
-                            Text {
-                                text: "Rename to:";
-                                font-size: 12px;
-                                color: #60cdff;
-                                vertical-alignment: center;
-                            }
-
-                            LineEdit {
-                                width: 200px;
-                                text <=> root.rename_text;
-                                accepted(new_name) => {
-                                    root.is_renaming = false;
-                                    root.command_commit_rename(new_name);
-                                    key_scope.focus();
-                                }
-                            }
-
-                            CommandBarButton {
-                                icon: "\u{E73E}";
-                                icon_tint: #60cdff;
-                                label: "Save";
-                                clicked => {
-                                    root.is_renaming = false;
-                                    root.command_commit_rename(root.rename_text);
-                                    key_scope.focus();
-                                }
-                            }
-
-                            CommandBarButton {
-                                icon: "\u{E8BB}";
-                                clicked => {
-                                    root.is_renaming = false;
-                                    key_scope.focus();
-                                }
-                            }
+                        // Connect to NAS / Map Network Drive quick button when in Network view
+                        if root.active_nav_key == "network": CommandBarButton {
+                            icon: "\u{E774}";
+                            icon_tint: Theme.accent;
+                            label: "Map network drive";
+                            clicked => { root.command_map_network_drive(); }
                         }
 
                         // Flexible middle spacer pushing Details/Preview to the right
@@ -965,6 +1054,7 @@ export component MainWindow inherits Window {
 
                         CommandBarButton {
                             icon: "\u{E946}";
+                            icon_tint: root.show_details ? Theme.accent : Theme.text_primary;
                             label: "Details";
                             is_active: root.show_details;
                             clicked => { root.command_toggle_details(); }
@@ -972,6 +1062,7 @@ export component MainWindow inherits Window {
 
                         CommandBarButton {
                             icon: "\u{E890}";
+                            icon_tint: root.show_preview ? Theme.accent : Theme.text_primary;
                             label: "Preview";
                             is_active: root.show_preview;
                             clicked => { root.command_toggle_preview(); }
@@ -980,7 +1071,7 @@ export component MainWindow inherits Window {
                 }
 
                 // Separator below Command Bar
-                Rectangle { height: 1px; background: #2d2d2d; }
+                Rectangle { height: 1px; background: Theme.divider; }
 
                 // =========================================================
                 // 4. MAIN WORKSPACE (Sidebar + Folder View + Preview/Details)
@@ -991,8 +1082,8 @@ export component MainWindow inherits Window {
 
                     // Left Navigation Sidebar
                     Rectangle {
-                        width: 230px;
-                        background: #191919;
+                        width: 240px;
+                        background: Theme.sidebar_bg;
 
                         ScrollView {
                             VerticalLayout {
@@ -1025,7 +1116,7 @@ export component MainWindow inherits Window {
                                         y: 4px;
                                         width: parent.width - 16px;
                                         height: 1px;
-                                        background: #2b2b2b;
+                                        background: Theme.divider;
                                     }
                                 }
 
@@ -1090,47 +1181,47 @@ export component MainWindow inherits Window {
                                         y: 5px;
                                         width: parent.width - 16px;
                                         height: 1px;
-                                        background: #2b2b2b;
+                                        background: Theme.divider;
                                     }
                                 }
 
                                 // This PC Section Header
                                 HorizontalLayout {
-                                    height: 28px;
+                                    height: 30px;
                                     padding-left: 10px;
                                     spacing: 8px;
 
                                     Text {
-                                        width: 16px;
+                                        width: 18px;
                                         text: "\u{EC4E}";
                                         font-family: "Segoe Fluent Icons";
-                                        font-size: 13px;
-                                        color: #a0a0a0;
+                                        font-size: 14px;
+                                        color: Theme.text_secondary;
                                         vertical-alignment: center;
                                     }
 
                                     Text {
                                         horizontal-stretch: 1;
                                         text: "This PC";
-                                        font-size: 12px;
+                                        font-size: 13px;
                                         font-weight: 600;
-                                        color: #b0b0b0;
+                                        color: Theme.text_primary;
                                         vertical-alignment: center;
                                     }
                                 }
 
                                 for drive in root.drives: Rectangle {
-                                    height: 52px;
-                                    border-radius: 4px;
-                                    background: root.current_path == drive.letter ? #2c2c2c : (drive_touch.has-hover ? #242424 : transparent);
+                                    height: 54px;
+                                    border-radius: 5px;
+                                    background: root.current_path == drive.letter ? Theme.row_selected : (drive_touch.has-hover ? Theme.row_hover : transparent);
 
                                     if root.current_path == drive.letter: Rectangle {
                                         x: 2px;
-                                        y: 14px;
+                                        y: 15px;
                                         width: 3px;
                                         height: 24px;
                                         border-radius: 1.5px;
-                                        background: #60cdff;
+                                        background: Theme.accent;
                                     }
 
                                     VerticalLayout {
@@ -1148,7 +1239,7 @@ export component MainWindow inherits Window {
                                                 text: "\u{EDA2}";
                                                 font-family: "Segoe Fluent Icons";
                                                 font-size: 16px;
-                                                color: #60cdff;
+                                                color: Theme.accent;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: center;
                                             }
@@ -1158,17 +1249,18 @@ export component MainWindow inherits Window {
                                                 spacing: 1px;
 
                                                 Text {
-                                                    text: drive.name + " (" + drive.letter + ")";
-                                                    font-size: 12px;
-                                                    color: #e6e6e6;
+                                                    text: drive.name;
+                                                    font-size: 13px;
+                                                    font-weight: 500;
+                                                    color: Theme.text_primary;
                                                     horizontal-alignment: left;
                                                     overflow: elide;
                                                 }
 
                                                 Text {
                                                     text: drive.free_str + " free of " + drive.total_str;
-                                                    font-size: 10px;
-                                                    color: #888888;
+                                                    font-size: 11px;
+                                                    color: Theme.text_secondary;
                                                     horizontal-alignment: left;
                                                     overflow: elide;
                                                 }
@@ -1179,14 +1271,14 @@ export component MainWindow inherits Window {
                                         Rectangle {
                                             height: 4px;
                                             border-radius: 2px;
-                                            background: #333333;
+                                            background: Theme.border;
 
                                             Rectangle {
                                                 x: 0px;
                                                 width: parent.width * drive.percent_used;
                                                 height: parent.height;
                                                 border-radius: 2px;
-                                                background: drive.percent_used > 0.9 ? #f85149 : #60cdff;
+                                                background: drive.percent_used > 0.9 ? #f85149 : Theme.accent;
                                             }
                                         }
                                     }
@@ -1195,25 +1287,45 @@ export component MainWindow inherits Window {
                                         clicked => { root.nav_to_path(drive.letter); }
                                     }
                                 }
+
+                                Rectangle {
+                                    height: 11px;
+                                    Rectangle {
+                                        x: 8px;
+                                        y: 5px;
+                                        width: parent.width - 16px;
+                                        height: 1px;
+                                        background: Theme.divider;
+                                    }
+                                }
+
+                                // Network / NAS Section
+                                NavItem {
+                                    icon: "\u{E774}";
+                                    icon_color: #60cdff;
+                                    label: "Network";
+                                    is_selected: root.active_nav_key == "network";
+                                    clicked => { root.nav_to_path("network"); }
+                                }
                             }
                         }
                     }
 
                     // Vertical Divider between Navigation Pane and Content View
-                    Rectangle { width: 1px; background: #2b2b2b; }
+                    Rectangle { width: 1px; background: Theme.divider; }
 
                     // Center Folder Content View
                     Rectangle {
                         horizontal-stretch: 1;
-                        background: #191919;
+                        background: Theme.content_bg;
 
                         VerticalLayout {
                             spacing: 0px;
 
                             // Table Column Headers (Details View)
                             if root.view_mode == "details": Rectangle {
-                                height: 34px;
-                                background: #191919;
+                                height: 36px;
+                                background: Theme.content_bg;
 
                                 HorizontalLayout {
                                     padding-left: 16px;
@@ -1223,8 +1335,8 @@ export component MainWindow inherits Window {
                                     // Name Header
                                     Rectangle {
                                         horizontal-stretch: 4;
-                                        background: name_hdr_touch.has-hover ? #242424 : transparent;
-                                        border-radius: 3px;
+                                        background: name_hdr_touch.has-hover ? Theme.row_hover : transparent;
+                                        border-radius: 4px;
 
                                         HorizontalLayout {
                                             padding-left: 8px;
@@ -1233,8 +1345,9 @@ export component MainWindow inherits Window {
 
                                             Text {
                                                 text: "Name";
-                                                font-size: 12px;
-                                                color: root.sort_column == "name" ? #ffffff : #a6a6a6;
+                                                font-size: 13px;
+                                                font-weight: 600;
+                                                color: root.sort_column == "name" ? Theme.text_primary : Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: left;
                                             }
@@ -1242,8 +1355,8 @@ export component MainWindow inherits Window {
                                             if root.sort_column == "name": Text {
                                                 text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
                                                 font-family: "Segoe Fluent Icons";
-                                                font-size: 9px;
-                                                color: #60cdff;
+                                                font-size: 10px;
+                                                color: Theme.accent;
                                                 vertical-alignment: center;
                                             }
 
@@ -1255,13 +1368,13 @@ export component MainWindow inherits Window {
                                         }
                                     }
 
-                                    Rectangle { width: 1px; height: 16px; y: 9px; background: #2e2e2e; }
+                                    Rectangle { width: 1px; height: 18px; y: 9px; background: Theme.divider; }
 
                                     // Date modified Header
                                     Rectangle {
-                                        width: 150px;
-                                        background: date_hdr_touch.has-hover ? #242424 : transparent;
-                                        border-radius: 3px;
+                                        width: 160px;
+                                        background: date_hdr_touch.has-hover ? Theme.row_hover : transparent;
+                                        border-radius: 4px;
 
                                         HorizontalLayout {
                                             padding-left: 6px;
@@ -1269,8 +1382,9 @@ export component MainWindow inherits Window {
 
                                             Text {
                                                 text: "Date modified";
-                                                font-size: 12px;
-                                                color: root.sort_column == "date" ? #ffffff : #a6a6a6;
+                                                font-size: 13px;
+                                                font-weight: 600;
+                                                color: root.sort_column == "date" ? Theme.text_primary : Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: left;
                                             }
@@ -1278,8 +1392,8 @@ export component MainWindow inherits Window {
                                             if root.sort_column == "date": Text {
                                                 text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
                                                 font-family: "Segoe Fluent Icons";
-                                                font-size: 9px;
-                                                color: #60cdff;
+                                                font-size: 10px;
+                                                color: Theme.accent;
                                                 vertical-alignment: center;
                                             }
 
@@ -1291,13 +1405,13 @@ export component MainWindow inherits Window {
                                         }
                                     }
 
-                                    Rectangle { width: 1px; height: 16px; y: 9px; background: #2e2e2e; }
+                                    Rectangle { width: 1px; height: 18px; y: 9px; background: Theme.divider; }
 
                                     // Type Header
                                     Rectangle {
-                                        width: 170px;
-                                        background: type_hdr_touch.has-hover ? #242424 : transparent;
-                                        border-radius: 3px;
+                                        width: 190px;
+                                        background: type_hdr_touch.has-hover ? Theme.row_hover : transparent;
+                                        border-radius: 4px;
 
                                         HorizontalLayout {
                                             padding-left: 6px;
@@ -1305,8 +1419,9 @@ export component MainWindow inherits Window {
 
                                             Text {
                                                 text: "Type";
-                                                font-size: 12px;
-                                                color: root.sort_column == "type" ? #ffffff : #a6a6a6;
+                                                font-size: 13px;
+                                                font-weight: 600;
+                                                color: root.sort_column == "type" ? Theme.text_primary : Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: left;
                                             }
@@ -1314,8 +1429,8 @@ export component MainWindow inherits Window {
                                             if root.sort_column == "type": Text {
                                                 text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
                                                 font-family: "Segoe Fluent Icons";
-                                                font-size: 9px;
-                                                color: #60cdff;
+                                                font-size: 10px;
+                                                color: Theme.accent;
                                                 vertical-alignment: center;
                                             }
 
@@ -1327,13 +1442,13 @@ export component MainWindow inherits Window {
                                         }
                                     }
 
-                                    Rectangle { width: 1px; height: 16px; y: 9px; background: #2e2e2e; }
+                                    Rectangle { width: 1px; height: 18px; y: 9px; background: Theme.divider; }
 
                                     // Size Header
                                     Rectangle {
-                                        width: 95px;
-                                        background: size_hdr_touch.has-hover ? #242424 : transparent;
-                                        border-radius: 3px;
+                                        width: 100px;
+                                        background: size_hdr_touch.has-hover ? Theme.row_hover : transparent;
+                                        border-radius: 4px;
 
                                         HorizontalLayout {
                                             padding-right: 6px;
@@ -1344,15 +1459,16 @@ export component MainWindow inherits Window {
                                             if root.sort_column == "size": Text {
                                                 text: root.sort_asc ? "\u{E70E}" : "\u{E70D}";
                                                 font-family: "Segoe Fluent Icons";
-                                                font-size: 9px;
-                                                color: #60cdff;
+                                                font-size: 10px;
+                                                color: Theme.accent;
                                                 vertical-alignment: center;
                                             }
 
                                             Text {
                                                 text: "Size";
-                                                font-size: 12px;
-                                                color: root.sort_column == "size" ? #ffffff : #a6a6a6;
+                                                font-size: 13px;
+                                                font-weight: 600;
+                                                color: root.sort_column == "size" ? Theme.text_primary : Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: right;
                                             }
@@ -1365,9 +1481,9 @@ export component MainWindow inherits Window {
                                 }
                             }
 
-                            if root.view_mode == "details": Rectangle { height: 1px; background: #2b2b2b; }
+                            if root.view_mode == "details": Rectangle { height: 1px; background: Theme.divider; }
 
-                            // Details List Rows
+                            // Details List Rows (36px height, 14px bright primary text, 13px secondary text)
                             if root.view_mode == "details": ScrollView {
                                 vertical-stretch: 1;
 
@@ -1376,32 +1492,32 @@ export component MainWindow inherits Window {
                                     padding-right: 12px;
                                     padding-top: 4px;
                                     padding-bottom: 8px;
-                                    spacing: 1px;
+                                    spacing: 2px;
 
                                     if root.entries.length == 0: Rectangle {
-                                        height: 120px;
+                                        height: 140px;
                                         Text {
-                                            text: root.search_text != "" ? "No items match your search." : "This folder is empty.";
-                                            font-size: 13px;
-                                            color: #777777;
+                                            text: root.search_text != "" ? "No items match your search." : (root.active_nav_key == "network" ? "No connected network shares found. Click 'Map network drive' or type \\\\server\\share in the address bar." : "This folder is empty.");
+                                            font-size: 14px;
+                                            color: Theme.text_secondary;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
                                         }
                                     }
 
                                     for entry[e_idx] in root.entries: Rectangle {
-                                        height: 32px;
-                                        border-radius: 4px;
-                                        background: root.selected_index == e_idx ? #2c2c2c : (row_touch.has-hover ? #222222 : transparent);
+                                        height: 36px;
+                                        border-radius: 5px;
+                                        background: root.selected_index == e_idx ? Theme.row_selected : (row_touch.has-hover ? Theme.row_hover : transparent);
 
                                         // Windows 11 Left Blue Selection Pill
                                         if root.selected_index == e_idx: Rectangle {
                                             x: 2px;
-                                            y: 8px;
+                                            y: 9px;
                                             width: 3px;
-                                            height: 16px;
+                                            height: 18px;
                                             border-radius: 1.5px;
-                                            background: #60cdff;
+                                            background: Theme.accent;
                                         }
 
                                         HorizontalLayout {
@@ -1409,7 +1525,7 @@ export component MainWindow inherits Window {
                                             padding-right: 8px;
                                             spacing: 12px;
 
-                                            // Name + Authentic Windows 11 Icon
+                                            // Name + Authentic Windows 11 Icon (or Inline Rename Editor)
                                             HorizontalLayout {
                                                 horizontal-stretch: 4;
                                                 spacing: 10px;
@@ -1422,14 +1538,33 @@ export component MainWindow inherits Window {
                                                     large: false;
                                                 }
 
-                                                Text {
+                                                if !(root.is_renaming && root.selected_index == e_idx): Text {
                                                     horizontal-stretch: 1;
                                                     text: entry.name;
-                                                    font-size: 13px;
-                                                    color: root.selected_index == e_idx ? #ffffff : #e6e6e6;
+                                                    font-size: 14px;
+                                                    font-weight: root.selected_index == e_idx ? 500 : 400;
+                                                    color: Theme.text_primary;
                                                     vertical-alignment: center;
                                                     horizontal-alignment: left;
                                                     overflow: elide;
+                                                }
+
+                                                if root.is_renaming && root.selected_index == e_idx: HorizontalLayout {
+                                                    horizontal-stretch: 1;
+                                                    padding-top: 3px;
+                                                    padding-bottom: 3px;
+                                                    spacing: 6px;
+
+                                                    LineEdit {
+                                                        horizontal-stretch: 1;
+                                                        font-size: 13.5px;
+                                                        text <=> root.rename_text;
+                                                        accepted(new_name) => {
+                                                            root.is_renaming = false;
+                                                            root.command_commit_rename(new_name);
+                                                            key_scope.focus();
+                                                        }
+                                                    }
                                                 }
                                             }
 
@@ -1438,10 +1573,10 @@ export component MainWindow inherits Window {
 
                                             // Date modified
                                             Text {
-                                                width: 150px;
+                                                width: 160px;
                                                 text: entry.mtime_str;
-                                                font-size: 12px;
-                                                color: #9e9e9e;
+                                                font-size: 13px;
+                                                color: Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: left;
                                                 overflow: elide;
@@ -1451,10 +1586,10 @@ export component MainWindow inherits Window {
 
                                             // Type
                                             Text {
-                                                width: 170px;
+                                                width: 190px;
                                                 text: entry.type_str;
-                                                font-size: 12px;
-                                                color: #9e9e9e;
+                                                font-size: 13px;
+                                                color: Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: left;
                                                 overflow: elide;
@@ -1464,10 +1599,10 @@ export component MainWindow inherits Window {
 
                                             // Size
                                             Text {
-                                                width: 95px;
+                                                width: 100px;
                                                 text: entry.size_str;
-                                                font-size: 12px;
-                                                color: #9e9e9e;
+                                                font-size: 13px;
+                                                color: Theme.text_secondary;
                                                 vertical-alignment: center;
                                                 horizontal-alignment: right;
                                                 overflow: elide;
@@ -1475,6 +1610,7 @@ export component MainWindow inherits Window {
                                         }
 
                                         row_touch := TouchArea {
+                                            enabled: !(root.is_renaming && root.selected_index == e_idx);
                                             clicked => {
                                                 key_scope.focus();
                                                 root.item_clicked(e_idx);
@@ -1493,8 +1629,8 @@ export component MainWindow inherits Window {
                                 }
                             }
 
-                            // Large Icons View
-                            if root.view_mode == "icons": ScrollView {
+                            // Non-Details Views (Extra large, Large, Medium Icons, Tiles, List, Content)
+                            if root.view_mode != "details": ScrollView {
                                 vertical-stretch: 1;
 
                                 VerticalLayout {
@@ -1502,17 +1638,17 @@ export component MainWindow inherits Window {
                                     spacing: 8px;
 
                                     for entry[e_idx] in root.entries: Rectangle {
-                                        height: 64px;
+                                        height: root.view_mode == "xl_icons" ? 84px : (root.view_mode == "list" ? 34px : 66px);
                                         border-radius: 6px;
-                                        background: root.selected_index == e_idx ? #2c2c2c : (grid_touch.has-hover ? #222222 : transparent);
+                                        background: root.selected_index == e_idx ? Theme.row_selected : (grid_touch.has-hover ? Theme.row_hover : transparent);
 
                                         if root.selected_index == e_idx: Rectangle {
                                             x: 2px;
-                                            y: 14px;
+                                            y: 12px;
                                             width: 3px;
-                                            height: 36px;
+                                            height: parent.height - 24px;
                                             border-radius: 1.5px;
-                                            background: #60cdff;
+                                            background: Theme.accent;
                                         }
 
                                         HorizontalLayout {
@@ -1525,28 +1661,28 @@ export component MainWindow inherits Window {
                                                 is_dir: entry.is_dir;
                                                 glyph: entry.icon_glyph;
                                                 glyph_color: entry.icon_color;
-                                                large: true;
+                                                large: root.view_mode != "list" && root.view_mode != "small_icons";
                                             }
 
                                             VerticalLayout {
                                                 horizontal-stretch: 1;
-                                                padding-top: 12px;
-                                                padding-bottom: 12px;
+                                                padding-top: root.view_mode == "list" ? 6px : 12px;
+                                                padding-bottom: root.view_mode == "list" ? 6px : 12px;
                                                 spacing: 3px;
 
                                                 Text {
                                                     text: entry.name;
-                                                    font-size: 13px;
+                                                    font-size: 14px;
                                                     font-weight: 500;
-                                                    color: #f0f0f0;
+                                                    color: Theme.text_primary;
                                                     horizontal-alignment: left;
                                                     overflow: elide;
                                                 }
 
-                                                Text {
-                                                    text: entry.type_str + (entry.size_str != "" ? "  •  " + entry.size_str : "");
-                                                    font-size: 11px;
-                                                    color: #909090;
+                                                if root.view_mode != "list": Text {
+                                                    text: entry.type_str + (entry.size_str != "" ? "  •  " + entry.size_str : "") + (entry.mtime_str != "" ? "  •  " + entry.mtime_str : "");
+                                                    font-size: 12.5px;
+                                                    color: Theme.text_secondary;
                                                     horizontal-alignment: left;
                                                     overflow: elide;
                                                 }
@@ -1574,50 +1710,52 @@ export component MainWindow inherits Window {
                         }
                     }
 
-                    // Right Preview Pane (Universal Excel / Word / PPTX / Code / Archive Preview)
+                    // =========================================================
+                    // RIGHT PREVIEW PANE (PDF Visual + Text, Images, Excel, Word, Code)
+                    // =========================================================
                     if root.show_preview: Rectangle {
                         width: 1px;
-                        background: #2b2b2b;
+                        background: Theme.divider;
                     }
 
                     if root.show_preview: Rectangle {
-                        width: 350px;
-                        background: #1d1d1d;
+                        width: 380px;
+                        background: Theme.pane_bg;
 
                         VerticalLayout {
-                            padding: 14px;
-                            spacing: 10px;
+                            padding: 16px;
+                            spacing: 12px;
 
                             HorizontalLayout {
-                                height: 32px;
+                                height: 36px;
                                 spacing: 10px;
 
                                 Text {
-                                    width: 20px;
+                                    width: 22px;
                                     text: "\u{E890}";
                                     font-family: "Segoe Fluent Icons";
-                                    font-size: 15px;
-                                    color: #60cdff;
+                                    font-size: 16px;
+                                    color: Theme.accent;
                                     vertical-alignment: center;
                                 }
 
                                 VerticalLayout {
                                     horizontal-stretch: 1;
-                                    spacing: 1px;
+                                    spacing: 2px;
 
                                     Text {
                                         text: root.preview_title != "" ? root.preview_title : "Preview Pane";
-                                        font-size: 13px;
+                                        font-size: 14px;
                                         font-weight: 600;
-                                        color: #ffffff;
+                                        color: Theme.text_primary;
                                         horizontal-alignment: left;
                                         overflow: elide;
                                     }
 
                                     Text {
                                         text: root.preview_subtitle;
-                                        font-size: 11px;
-                                        color: #888888;
+                                        font-size: 12px;
+                                        color: Theme.text_secondary;
                                         horizontal-alignment: left;
                                         overflow: elide;
                                     }
@@ -1629,26 +1767,46 @@ export component MainWindow inherits Window {
                                 }
                             }
 
-                            Rectangle { height: 1px; background: #2e2e2e; }
+                            Rectangle { height: 1px; background: Theme.divider; }
 
+                            // High-Resolution Visual Thumbnail / PDF Page / Image Render
+                            if root.has_preview_image: Rectangle {
+                                height: root.preview_type == "image" ? 320px : 210px;
+                                border-radius: 6px;
+                                background: Theme.content_bg;
+                                border-width: 1px;
+                                border-color: Theme.border;
+
+                                Image {
+                                    width: parent.width - 12px;
+                                    height: parent.height - 12px;
+                                    x: 6px;
+                                    y: 6px;
+                                    source: root.preview_image;
+                                    image-fit: contain;
+                                }
+                            }
+
+                            // Spreadsheet / Table Preview (Excel & CSV)
                             if root.preview_type == "table": ScrollView {
                                 vertical-stretch: 1;
                                 VerticalLayout {
                                     spacing: 2px;
 
                                     Rectangle {
-                                        height: 26px;
-                                        background: #272727;
+                                        height: 28px;
+                                        background: Theme.nav_bg;
+                                        border-radius: 4px;
                                         HorizontalLayout {
-                                            padding-left: 6px;
-                                            padding-right: 6px;
+                                            padding-left: 8px;
+                                            padding-right: 8px;
                                             spacing: 8px;
                                             for h in root.preview_table_headers: Text {
-                                                width: 85px;
+                                                width: 90px;
                                                 text: h;
-                                                font-size: 11px;
+                                                font-size: 12px;
                                                 font-weight: 600;
-                                                color: #60cdff;
+                                                color: Theme.accent;
                                                 vertical-alignment: center;
                                                 overflow: elide;
                                             }
@@ -1656,17 +1814,18 @@ export component MainWindow inherits Window {
                                     }
 
                                     for row in root.preview_table_rows: Rectangle {
-                                        height: 24px;
-                                        background: #202020;
+                                        height: 26px;
+                                        background: Theme.content_bg;
+                                        border-radius: 3px;
                                         HorizontalLayout {
-                                            padding-left: 6px;
-                                            padding-right: 6px;
+                                            padding-left: 8px;
+                                            padding-right: 8px;
                                             spacing: 8px;
                                             for cell in row.cells: Text {
-                                                width: 85px;
+                                                width: 90px;
                                                 text: cell;
-                                                font-size: 11px;
-                                                color: #d8d8d8;
+                                                font-size: 12px;
+                                                color: Theme.text_primary;
                                                 vertical-alignment: center;
                                                 overflow: elide;
                                             }
@@ -1675,13 +1834,14 @@ export component MainWindow inherits Window {
                                 }
                             }
 
-                            if root.preview_type == "text": ScrollView {
+                            // PDF Text / Word / PowerPoint / Code / Markdown Preview
+                            if root.preview_type == "text" || root.preview_type == "image": ScrollView {
                                 vertical-stretch: 1;
                                 Text {
                                     text: root.preview_text_content;
-                                    font-family: "Cascadia Mono, Consolas, monospace";
-                                    font-size: 12px;
-                                    color: #dcdcdc;
+                                    font-family: "Segoe UI Variable Text";
+                                    font-size: 13px;
+                                    color: Theme.text_primary;
                                     wrap: word-wrap;
                                 }
                             }
@@ -1689,9 +1849,9 @@ export component MainWindow inherits Window {
                             if root.preview_type == "none": Rectangle {
                                 vertical-stretch: 1;
                                 Text {
-                                    text: "Select a file to preview.";
-                                    font-size: 12px;
-                                    color: #777777;
+                                    text: "Select a file to preview its contents.";
+                                    font-size: 13.5px;
+                                    color: Theme.text_secondary;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
@@ -1699,19 +1859,21 @@ export component MainWindow inherits Window {
                         }
                     }
 
-                    // Right Details Pane (Windows IPropertyStore Metadata)
+                    // =========================================================
+                    // RIGHT DETAILS PANE (Windows 11 Hero Card + Structured Metadata)
+                    // =========================================================
                     if root.show_details: Rectangle {
                         width: 1px;
-                        background: #2b2b2b;
+                        background: Theme.divider;
                     }
 
                     if root.show_details: Rectangle {
-                        width: 290px;
-                        background: #1d1d1d;
+                        width: 320px;
+                        background: Theme.pane_bg;
 
                         VerticalLayout {
-                            padding: 14px;
-                            spacing: 10px;
+                            padding: 16px;
+                            spacing: 12px;
 
                             HorizontalLayout {
                                 height: 32px;
@@ -1721,17 +1883,17 @@ export component MainWindow inherits Window {
                                     width: 20px;
                                     text: "\u{E946}";
                                     font-family: "Segoe Fluent Icons";
-                                    font-size: 15px;
-                                    color: #60cdff;
+                                    font-size: 16px;
+                                    color: Theme.accent;
                                     vertical-alignment: center;
                                 }
 
                                 Text {
                                     horizontal-stretch: 1;
                                     text: "Details";
-                                    font-size: 13px;
+                                    font-size: 14px;
                                     font-weight: 600;
-                                    color: #ffffff;
+                                    color: Theme.text_primary;
                                     vertical-alignment: center;
                                     horizontal-alignment: left;
                                 }
@@ -1742,29 +1904,74 @@ export component MainWindow inherits Window {
                                 }
                             }
 
-                            Rectangle { height: 1px; background: #2e2e2e; }
+                            // Hero Header Card for Selected Item
+                            if root.selected_index >= 0: Rectangle {
+                                height: root.has_preview_image ? 170px : 84px;
+                                border-radius: 6px;
+                                background: Theme.content_bg;
+                                border-width: 1px;
+                                border-color: Theme.border;
+
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+
+                                    if root.has_preview_image: Image {
+                                        height: 96px;
+                                        source: root.preview_image;
+                                        image-fit: contain;
+                                    }
+
+                                    Text {
+                                        text: root.preview_title;
+                                        font-size: 14.5px;
+                                        font-weight: 600;
+                                        color: Theme.text_primary;
+                                        horizontal-alignment: left;
+                                        overflow: elide;
+                                    }
+
+                                    Text {
+                                        text: root.preview_subtitle;
+                                        font-size: 12.5px;
+                                        color: Theme.text_secondary;
+                                        horizontal-alignment: left;
+                                        overflow: elide;
+                                    }
+                                }
+                            }
+
+                            Rectangle { height: 1px; background: Theme.divider; }
 
                             ScrollView {
                                 vertical-stretch: 1;
                                 VerticalLayout {
-                                    spacing: 8px;
+                                    spacing: 10px;
+
+                                    if root.item_properties.length == 0: Text {
+                                        text: "Select a file or folder to view its detailed properties.";
+                                        font-size: 13px;
+                                        color: Theme.text_secondary;
+                                        wrap: word-wrap;
+                                    }
 
                                     for prop in root.item_properties: VerticalLayout {
-                                        spacing: 2px;
+                                        spacing: 3px;
                                         Text {
                                             text: prop.name;
-                                            font-size: 11px;
-                                            color: #888888;
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            color: Theme.text_secondary;
                                             horizontal-alignment: left;
                                         }
                                         Text {
                                             text: prop.value;
-                                            font-size: 12px;
-                                            color: #e4e4e4;
+                                            font-size: 13.5px;
+                                            color: Theme.text_primary;
                                             horizontal-alignment: left;
                                             wrap: word-wrap;
                                         }
-                                        Rectangle { height: 1px; background: #272727; }
+                                        Rectangle { height: 1px; background: Theme.divider; }
                                     }
                                 }
                             }
@@ -1775,11 +1982,11 @@ export component MainWindow inherits Window {
                 // =========================================================
                 // 5. WINDOWS 11 STATUS BAR
                 // =========================================================
-                Rectangle { height: 1px; background: #2b2b2b; }
+                Rectangle { height: 1px; background: Theme.divider; }
 
                 Rectangle {
-                    height: 28px;
-                    background: #191919;
+                    height: 30px;
+                    background: Theme.sidebar_bg;
 
                     HorizontalLayout {
                         padding-left: 14px;
@@ -1788,43 +1995,319 @@ export component MainWindow inherits Window {
 
                         Text {
                             text: root.status_item_count;
-                            font-size: 11px;
-                            color: #a0a0a0;
+                            font-size: 12px;
+                            color: Theme.text_secondary;
                             vertical-alignment: center;
                         }
 
                         if root.status_selection_info != "": Rectangle {
                             width: 1px;
-                            height: 12px;
+                            height: 14px;
                             y: 8px;
-                            background: #383838;
+                            background: Theme.border;
                         }
 
                         if root.status_selection_info != "": Text {
                             text: root.status_selection_info;
-                            font-size: 11px;
-                            color: #a0a0a0;
+                            font-size: 12px;
+                            color: Theme.text_primary;
                             vertical-alignment: center;
                         }
 
                         Rectangle { horizontal-stretch: 1; }
 
                         FluentIconButton {
-                            width: 24px;
-                            height: 24px;
+                            width: 26px;
+                            height: 26px;
                             y: 2px;
                             icon: "\u{E8FD}";
                             is_active: root.view_mode == "details";
-                            clicked => { root.view_mode = "details"; }
+                            clicked => { root.command_set_view("details"); }
                         }
 
                         FluentIconButton {
-                            width: 24px;
-                            height: 24px;
+                            width: 26px;
+                            height: 26px;
                             y: 2px;
                             icon: "\u{E8A9}";
-                            is_active: root.view_mode == "icons";
-                            clicked => { root.view_mode = "icons"; }
+                            is_active: root.view_mode != "details";
+                            clicked => { root.command_set_view("icons"); }
+                        }
+                    }
+                }
+            }
+
+            // =========================================================
+            // 6. FLOATING WINDOWS 11 COMMAND BAR FLYOUT MENUS (NEW, SORT, VIEW)
+            // =========================================================
+            if root.active_flyout != "": TouchArea {
+                width: 100%;
+                height: 100%;
+                clicked => { root.active_flyout = ""; }
+            }
+
+            // "+ New" Flyout Menu
+            if root.active_flyout == "new": Rectangle {
+                x: 12px;
+                y: 136px;
+                width: 245px;
+                height: 162px;
+                border-radius: 8px;
+                background: Theme.flyout_bg;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalLayout {
+                    padding: 6px;
+                    spacing: 2px;
+
+                    FlyoutMenuItem {
+                        icon: "\u{E8B7}";
+                        icon_color: #f5ba18;
+                        label: "Folder";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_new_folder();
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.divider; }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E8A5}";
+                        icon_color: #60cdff;
+                        label: "Text Document (.txt)";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_new_file("New Text Document.txt");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E943}";
+                        icon_color: #b4a0ff;
+                        label: "Markdown Note (.md)";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_new_file("Notes.md");
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.divider; }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E774}";
+                        icon_color: #28c76f;
+                        label: "Map Network Drive (NAS)...";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_map_network_drive();
+                        }
+                    }
+                }
+            }
+
+            // "Sort" Flyout Menu (Exact replica of Screenshot 1)
+            if root.active_flyout == "sort": Rectangle {
+                x: 310px;
+                y: 136px;
+                width: 215px;
+                height: 246px;
+                border-radius: 8px;
+                background: Theme.flyout_bg;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalLayout {
+                    padding: 6px;
+                    spacing: 2px;
+
+                    FlyoutMenuItem {
+                        label: "Name";
+                        is_checked: root.sort_column == "name";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.sort_by("name");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        label: "Date modified";
+                        is_checked: root.sort_column == "date";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.sort_by("date");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        label: "Type";
+                        is_checked: root.sort_column == "type";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.sort_by("type");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        label: "Size";
+                        is_checked: root.sort_column == "size";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.sort_by("size");
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.divider; }
+
+                    FlyoutMenuItem {
+                        label: "Ascending";
+                        is_checked: root.sort_asc;
+                        clicked => {
+                            root.active_flyout = "";
+                            root.sort_direction(true);
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        label: "Descending";
+                        is_checked: !root.sort_asc;
+                        clicked => {
+                            root.active_flyout = "";
+                            root.sort_direction(false);
+                        }
+                    }
+                }
+            }
+
+            // "View" Flyout Menu (Exact replica of Screenshot 2)
+            if root.active_flyout == "view": Rectangle {
+                x: 392px;
+                y: 136px;
+                width: 250px;
+                height: 416px;
+                border-radius: 8px;
+                background: Theme.flyout_bg;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                VerticalLayout {
+                    padding: 6px;
+                    spacing: 2px;
+
+                    FlyoutMenuItem {
+                        icon: "\u{E740}";
+                        label: "Extra large icons";
+                        is_checked: root.view_mode == "xl_icons";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("xl_icons");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E8A9}";
+                        label: "Large icons";
+                        is_checked: root.view_mode == "large_icons";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("large_icons");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{F0E2}";
+                        label: "Medium-sized icons";
+                        is_checked: root.view_mode == "icons";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("icons");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E80A}";
+                        label: "Small icons";
+                        is_checked: root.view_mode == "small_icons";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("small_icons");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E8FD}";
+                        label: "List";
+                        is_checked: root.view_mode == "list";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("list");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E8FD}";
+                        label: "Details";
+                        is_checked: root.view_mode == "details";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("details");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{ECA5}";
+                        label: "Tiles";
+                        is_checked: root.view_mode == "tiles";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("tiles");
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E8FD}";
+                        label: "Content";
+                        is_checked: root.view_mode == "content";
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_set_view("content");
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.divider; }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E946}";
+                        icon_color: Theme.accent;
+                        label: "Details pane";
+                        is_checked: root.show_details;
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_toggle_details();
+                        }
+                    }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E890}";
+                        icon_color: Theme.accent;
+                        label: "Preview pane";
+                        is_checked: root.show_preview;
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_toggle_preview();
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: Theme.divider; }
+
+                    FlyoutMenuItem {
+                        icon: "\u{E7B3}";
+                        label: "Hidden items";
+                        is_checked: root.show_hidden;
+                        clicked => {
+                            root.active_flyout = "";
+                            root.command_toggle_hidden();
                         }
                     }
                 }
