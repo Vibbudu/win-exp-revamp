@@ -4,17 +4,20 @@
 use anyhow::Result;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Storage::FileSystem::FILE_ATTRIBUTE_DIRECTORY;
-use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
+use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, IDataObject};
+use windows::Win32::System::Ole::{DROPEFFECT_COPY, DROPEFFECT_LINK, DROPEFFECT_MOVE};
+use windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use windows::Win32::UI::Shell::{
     FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_RENAMEONCOLLISION, FOFX_ADDUNDORECORD, FOFX_NOMINIMIZEBOX,
-    FOFX_RECYCLEONDELETE, FileOperation, IFileOperation, IShellItem, SHCreateItemFromParsingName, ShellExecuteExW, SEE_MASK_INVOKEIDLIST, SHELLEXECUTEINFOW,
-    SHOpenWithDialog, OPENASINFO, OAIF_ALLOW_REGISTRATION, OAIF_EXEC, OAIF_REGISTER_EXT,
+    FOFX_RECYCLEONDELETE, FileOperation, IFileOperation, IShellFolder, IShellItem, ILFindLastID,
+    SHBindToParent, SHCreateItemFromParsingName, SHDoDragDrop, ShellExecuteExW, SEE_MASK_INVOKEIDLIST,
+    SHELLEXECUTEINFOW, SHOpenWithDialog, OPENASINFO, OAIF_ALLOW_REGISTRATION, OAIF_EXEC, OAIF_REGISTER_EXT,
     FILEOPERATION_FLAGS,
 };
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, PCWSTR};
 
-use crate::util::wide;
+use crate::util::{Pidl, wide};
 
 pub fn item(path: &str) -> windows::core::Result<IShellItem> {
     let w = wide(path);
@@ -139,5 +142,29 @@ pub fn open_with_dialog(owner: HWND, path: &str) -> Result<()> {
         oaifInFlags: OAIF_ALLOW_REGISTRATION | OAIF_REGISTER_EXT | OAIF_EXEC,
     };
     unsafe { SHOpenWithDialog(Some(owner), &info)? };
+    Ok(())
+}
+
+/// Starts a native Windows Shell drag-and-drop operation (`SHDoDragDrop`) for `paths`
+/// so files and folders can be dragged out of Hyperion Explorer and dropped into external
+/// applications (Chrome, Discord, VS Code, Desktop, other folders, etc.).
+pub fn start_drag_drop(owner: HWND, paths: &[String]) -> Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let pidls: Vec<Pidl> = paths
+        .iter()
+        .map(|p| Pidl::parse(p))
+        .collect::<windows::core::Result<_>>()?;
+    unsafe {
+        let folder: IShellFolder = SHBindToParent(pidls[0].0, None)?;
+        let children: Vec<*const ITEMIDLIST> = pidls
+            .iter()
+            .map(|p| ILFindLastID(p.0) as *const _)
+            .collect();
+        let data_obj: IDataObject = folder.GetUIObjectOf(owner, &children, None)?;
+        let ok_effects = DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK;
+        let _ = SHDoDragDrop(Some(owner), &data_obj, None, ok_effects);
+    }
     Ok(())
 }

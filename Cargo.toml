@@ -69,6 +69,10 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Controls",
+    "Foundation",
+    "Data_Pdf",
+    "Storage",
+    "Storage_Streams",
 ]
 
 [profile.release]

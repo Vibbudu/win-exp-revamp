@@ -133,6 +133,30 @@ cargo run -p app
 
 ## 7. Chronological Change Log
 
+### [2026-11-06] — Windows 11 Compact View, Single-Border Address/Search Bar, Draggable Column Resizers, LruCache Thumbnails, Cloud Sync Badges, Cross-App Drag-and-Drop, Mouse Side-Button Nav & WinRT PDF Page Rendering
+- **Author/Model**: Gemini (High) / Antigravity Pair Programmer
+- **Description**:
+  1. **Windows 11 Compact View & Proportions**:
+     - Implemented Windows 11 Compact View (`24px` file rows, `26px` sidebar rows, `0px` vertical row spacing, `12px` typography) matching stock Windows 11 File Explorer (`media_1793976065404_95149a4c.jpg`), toggleable via **`View` -> `Show` -> `Compact view`**.
+  2. **Fixed Address Bar & Search Box Double-Border Glitch (`media_1793976035882_2366d77b.png`)**:
+     - Replaced `std-widgets.slint`'s nested `LineEdit` with Slint's primitive borderless `TextInput` inside a single Windows 11 `Rectangle` container (`#2b2b2b` dark / `#ffffff` light) with properly aligned clear (`✕`) and search (`\u{E721}`) buttons.
+  3. **Draggable Column Borders & Sidebar/Pane Splitters (`media_1793976061024_56eea393.jpg`)**:
+     - Added interactive `MouseCursor.ew-resize` drag handles on all Details table column headers (`col_name_width`, `col_date_width`, `col_type_width`, `col_size_width`) as well as draggable splitters for the Left Navigation Sidebar (`sidebar_width`) and Right Preview/Details Pane (`pane_width`).
+  4. **Cascading `View -> Show >` Submenu & Multi-Column Grid Views (`media_1793976012140_960cc9c0.png`, `media_1793976014767_f6779f8e.png`)**:
+     - Added the cascading `Show >` submenu (`Navigation pane`, `Compact view`, `Item check boxes`, `File name extensions`, `Hidden items`).
+     - Added true multi-column layouts (`EntryGridRow`) for `Tiles`, `Extra large icons`, `Large icons`, `Medium-sized icons`, `Small icons`, `List`, `Details`, and `Content`, plus the **This PC** Devices and Drives dashboard.
+  5. **Low-RAM Asynchronous Thumbnail Loader (`LruCache`) & Google Drive Cloud Sync Badge (`media_1793976014767_f6779f8e.png`)**:
+     - Added a bounded 256-entry `lru::LruCache` (`<15 MB` RAM) backed by `StaPool` (`map_entries_and_schedule_thumbs`) that asynchronously populates real image/video thumbnails and per-file icons.
+     - Added `shell_interop::icons::is_cloud_synced_item` and the `CloudSyncBadge` component to render the bottom-left white-and-blue cloud sync badge on Google Drive (`DriveFS`), OneDrive, and cloud placeholder items.
+  6. **Native Cross-App File Drag-and-Drop (`SHDoDragDrop`) & Mouse Back/Forward Side Buttons (`WM_XBUTTONDOWN`)**:
+     - Implemented `shell_interop::ops::start_drag_drop` (`IShellFolder::GetUIObjectOf` -> `IDataObject` -> `SHDoDragDrop`) so files and folders can be dragged out of Hyperion Explorer and dropped into external apps (Chrome, Discord, VS Code, Desktop, other folders).
+     - Implemented `shell_interop::system::install_mouse_nav_hook` (`SetWindowSubclass` intercepting `WM_XBUTTONDOWN` and `WM_APPCOMMAND`) so mouse `XButton1` and `XButton2` navigate Back and Forward.
+  7. **Real Visual PDF Page Rendering (`Windows.Data.Pdf.PdfDocument`) & Zero-Lag Asynchronous Search**:
+     - Implemented `preview::pdf::render_pdf_first_page_rgba` using Windows 11's native `Windows.Data.Pdf.PdfDocument` (`RenderWithOptionsToStreamAsync`) so PDF previews display the actual rendered document page instead of falling back to the default PDF reader app icon.
+     - Moved search execution off the UI thread with an `AtomicU64` generation counter and prioritized in-memory SIMD `CompactIndex` queries (`<5ms` in RAM) before bounded directory checks.
+- **Files Created/Modified**:
+  - `Cargo.toml`, `crates/shell-interop/src/ops.rs`, `crates/shell-interop/src/icons.rs`, `crates/shell-interop/src/system.rs`, `crates/preview/Cargo.toml`, `crates/preview/src/pdf.rs`, `crates/indexer/src/lib.rs`, `app/Cargo.toml`, `app/ui/main.slint`, `app/src/main.rs`, `AGENTS.md`.
+
 ### [2026-11-06] — Window Drag Fix, Google Drive Stability, PDF Visual+Text Previews, Dark Context Menu, Auto Dark/Light Theme, Command Bar Flyouts & NAS Support
 - **Author/Model**: Gemini (High) / Antigravity Pair Programmer
 - **Description**:

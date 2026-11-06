@@ -15,6 +15,7 @@ crossbeam-channel = { workspace = true }
 rayon = { workspace = true }
 windows = { workspace = true }
 parking_lot = { workspace = true }
+lru = { workspace = true }
 slint = { version = "1.18.1", features = ["compat-1-2", "renderer-femtovg", "renderer-software"] }
 
 [build-dependencies]

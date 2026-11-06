@@ -114,3 +114,76 @@ fn hbitmap_to_rgba(hbmp: HBITMAP) -> Result<(u32, u32, Vec<u8>)> {
 pub fn icon_is_per_file(ext: &str) -> bool {
     matches!(ext, "exe" | "lnk" | "ico" | "url" | "msi" | "scr" | "cpl" | "appref-ms" | "cur" | "ani" | "dll" | "website")
 }
+
+/// Extensions that represent images/photos/videos/documents where per-item shell thumbnails
+/// are beneficial in directory listings.
+pub fn has_visual_thumbnail(ext: &str) -> bool {
+    matches!(
+        ext,
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "webp"
+            | "gif"
+            | "bmp"
+            | "ico"
+            | "tif"
+            | "tiff"
+            | "mp4"
+            | "mov"
+            | "mkv"
+            | "avi"
+            | "webm"
+            | "html"
+            | "htm"
+            | "exe"
+            | "lnk"
+            | "url"
+    )
+}
+
+/// Detects whether a file/folder resides on a cloud-backed filesystem (Google Drive `DriveFS`,
+/// OneDrive, iCloud, Dropbox) or carries cloud placeholder/reparse attributes so the UI can
+/// render the Windows 11 cloud sync overlay badge on the bottom-left of its icon/thumbnail.
+pub fn is_cloud_synced_item(path: &str, attrs: u32, cloud_roots: &[String]) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+    const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000;
+    const FILE_ATTRIBUTE_RECALL_ON_OPEN: u32 = 0x0004_0000;
+    const FILE_ATTRIBUTE_PINNED: u32 = 0x0008_0000;
+    const FILE_ATTRIBUTE_UNPINNED: u32 = 0x0010_0000;
+    const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x0040_0000;
+
+    if (attrs
+        & (FILE_ATTRIBUTE_OFFLINE
+            | FILE_ATTRIBUTE_RECALL_ON_OPEN
+            | FILE_ATTRIBUTE_PINNED
+            | FILE_ATTRIBUTE_UNPINNED
+            | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS))
+        != 0
+    {
+        return true;
+    }
+
+    let p_lower = path.to_ascii_lowercase();
+    if p_lower.contains("\\onedrive")
+        || p_lower.contains("\\my drive")
+        || p_lower.contains("\\shared drives")
+        || p_lower.contains("\\google drive")
+        || p_lower.contains("\\icloud")
+        || p_lower.contains("\\dropbox")
+    {
+        return true;
+    }
+
+    for root in cloud_roots {
+        if path.len() >= root.len() && path[..root.len()].eq_ignore_ascii_case(root) {
+            return true;
+        }
+    }
+
+    if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0 && p_lower.contains("drive") {
+        return true;
+    }
+
+    false
+}

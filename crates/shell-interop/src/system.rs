@@ -2,11 +2,12 @@
 //! detection and native Win32 dark context menu registration (`uxtheme.dll`).
 
 use ipc_types::SystemInfo;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
-use windows::Win32::UI::Shell::IsUserAnAdmin;
+use windows::Win32::UI::Shell::{DefSubclassProc, IsUserAnAdmin, SetWindowSubclass};
+use windows::Win32::UI::WindowsAndMessaging::{WM_APPCOMMAND, WM_XBUTTONDOWN};
 use windows::core::{PCSTR, w};
 
 /// DWM accent colour as `#rrggbb` (falls back to the Windows default blue).
@@ -108,5 +109,64 @@ pub fn system_info() -> SystemInfo {
         elevated: is_elevated(),
         user_name: std::env::var("USERNAME").unwrap_or_default(),
         home: std::env::var("USERPROFILE").unwrap_or_default(),
+    }
+}
+
+const MOUSE_NAV_SUBCLASS_ID: usize = 0x4859504D; // "HYPM"
+
+/// Installs a native Win32 window subclass to intercept Mouse Back (`XButton1`) and
+/// Mouse Forward (`XButton2`) side buttons (`WM_XBUTTONDOWN` and `WM_APPCOMMAND`).
+/// `on_nav(true)` is called for Back; `on_nav(false)` is called for Forward.
+pub fn install_mouse_nav_hook<F>(hwnd: HWND, on_nav: F)
+where
+    F: Fn(bool) + Send + Sync + 'static,
+{
+    if hwnd.0.is_null() {
+        return;
+    }
+    let cb: Box<dyn Fn(bool) + Send + Sync> = Box::new(on_nav);
+    let raw = Box::into_raw(Box::new(cb)) as usize;
+    unsafe {
+        let _ = SetWindowSubclass(hwnd, Some(mouse_nav_subclass_proc), MOUSE_NAV_SUBCLASS_ID, raw);
+    }
+}
+
+unsafe extern "system" fn mouse_nav_subclass_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _id: usize,
+    data: usize,
+) -> LRESULT {
+    unsafe {
+        if data != 0 {
+            if msg == WM_XBUTTONDOWN {
+                let xbutton = ((wp.0 >> 16) & 0xFFFF) as u16;
+                if xbutton == 1 {
+                    let cb = &*(data as *const Box<dyn Fn(bool) + Send + Sync>);
+                    cb(true);
+                    return LRESULT(1);
+                } else if xbutton == 2 {
+                    let cb = &*(data as *const Box<dyn Fn(bool) + Send + Sync>);
+                    cb(false);
+                    return LRESULT(1);
+                }
+            } else if msg == WM_APPCOMMAND {
+                let cmd = ((lp.0 >> 16) & 0x0FFF) as u16;
+                if cmd == 1 {
+                    // APPCOMMAND_BROWSER_BACKWARD
+                    let cb = &*(data as *const Box<dyn Fn(bool) + Send + Sync>);
+                    cb(true);
+                    return LRESULT(1);
+                } else if cmd == 2 {
+                    // APPCOMMAND_BROWSER_FORWARD
+                    let cb = &*(data as *const Box<dyn Fn(bool) + Send + Sync>);
+                    cb(false);
+                    return LRESULT(1);
+                }
+            }
+        }
+        DefSubclassProc(hwnd, msg, wp, lp)
     }
 }

@@ -3,11 +3,15 @@
 //! readable text from PDF `BT`..`ET` text blocks (`Tj`, `TJ`, `'`, `"`).
 
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Cursor, Read};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use flate2::read::{DeflateDecoder, ZlibDecoder};
 use ipc_types::Preview;
+use windows::Data::Pdf::{PdfDocument, PdfPageRenderOptions};
+use windows::Storage::StorageFile;
+use windows::Storage::Streams::{DataReader, InMemoryRandomAccessStream};
+use windows::core::HSTRING;
 
 const MAX_PDF_BYTES: usize = 16 * 1024 * 1024; // Read up to 16 MB for fast previewing
 
@@ -418,4 +422,77 @@ fn clean_extracted_text(s: &str) -> String {
         }
     }
     out.trim().to_string()
+}
+
+/// Renders the first page of a PDF file to an RGBA pixel buffer `(width, height, rgba_bytes)`
+/// using Windows 11's built-in `Windows.Data.Pdf.PdfDocument` WinRT engine.
+/// This renders the actual visual PDF page (even when no shell thumbnail handler is cached),
+/// avoiding generic browser/PDF reader app icons.
+pub fn render_pdf_first_page_rgba(path: &str, target_width: u32) -> Result<(u32, u32, Vec<u8>)> {
+    let hpath = HSTRING::from(path);
+    let file = StorageFile::GetFileFromPathAsync(&hpath)?.join()?;
+    let doc = PdfDocument::LoadFromFileAsync(&file)?.join()?;
+    if doc.PageCount()? == 0 {
+        return Err(anyhow!("PDF has 0 pages"));
+    }
+    let page = doc.GetPage(0)?;
+    let size = page.Size()?;
+    let w = size.Width.max(1.0);
+    let h = size.Height.max(1.0);
+    let dst_w = target_width.max(120);
+    let dst_h = ((dst_w as f32) * (h / w)).round().max(120.0) as u32;
+
+    let opts = PdfPageRenderOptions::new()?;
+    opts.SetDestinationWidth(dst_w)?;
+    opts.SetDestinationHeight(dst_h)?;
+
+    let stream = InMemoryRandomAccessStream::new()?;
+    page.RenderWithOptionsToStreamAsync(&stream, &opts)?.join()?;
+
+    let stream_size = stream.Size()? as u32;
+    if stream_size == 0 {
+        return Err(anyhow!("Rendered PDF stream is empty"));
+    }
+    let input = stream.GetInputStreamAt(0)?;
+    let reader = DataReader::CreateDataReader(&input)?;
+    reader.LoadAsync(stream_size)?.join()?;
+    let mut png_bytes = vec![0u8; stream_size as usize];
+    reader.ReadBytes(&mut png_bytes)?;
+
+    let decoder = png::Decoder::new(Cursor::new(png_bytes));
+    let mut png_reader = decoder.read_info()?;
+    let out_size = png_reader
+        .output_buffer_size()
+        .ok_or_else(|| anyhow!("PNG output buffer size overflow"))?;
+    let mut buf = vec![0u8; out_size];
+    let info = png_reader.next_frame(&mut buf)?;
+    let bytes = &buf[..info.buffer_size()];
+
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => bytes.to_vec(),
+        png::ColorType::Rgb => {
+            let mut out = Vec::with_capacity((info.width * info.height * 4) as usize);
+            for chunk in bytes.chunks_exact(3) {
+                out.extend_from_slice(&[chunk[0], chunk[1], chunk[2], 255]);
+            }
+            out
+        }
+        png::ColorType::GrayscaleAlpha => {
+            let mut out = Vec::with_capacity((info.width * info.height * 4) as usize);
+            for chunk in bytes.chunks_exact(2) {
+                out.extend_from_slice(&[chunk[0], chunk[0], chunk[0], chunk[1]]);
+            }
+            out
+        }
+        png::ColorType::Grayscale => {
+            let mut out = Vec::with_capacity((info.width * info.height * 4) as usize);
+            for &g in bytes {
+                out.extend_from_slice(&[g, g, g, 255]);
+            }
+            out
+        }
+        _ => return Err(anyhow!("Unsupported PNG color type from PdfDocument")),
+    };
+
+    Ok((info.width, info.height, rgba))
 }
