@@ -1,0 +1,1134 @@
+import { LineEdit, ScrollView, Button, ComboBox } from "std-widgets.slint";
+
+export struct EntryItem {
+    id: string,
+    name: string,
+    path: string,
+    is_dir: bool,
+    size_str: string,
+    mtime_str: string,
+    type_str: string,
+    icon_glyph: string,
+    icon_color: color,
+}
+
+export struct DriveItem {
+    letter: string,
+    name: string,
+    free_str: string,
+    total_str: string,
+    percent_used: float,
+}
+
+export struct CrumbItem {
+    label: string,
+    path: string,
+}
+
+export struct TabItem {
+    id: int,
+    title: string,
+    path: string,
+    is_active: bool,
+}
+
+export struct PreviewCell {
+    text: string,
+}
+
+export struct PreviewRow {
+    cells: [string],
+}
+
+export struct PropertyItem {
+    name: string,
+    value: string,
+}
+
+component IconButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> is_active: false;
+    in property <bool> is_disabled: false;
+    callback clicked();
+
+    min_width: 32px;
+    min_height: 32px;
+    border-radius: 4px;
+    background: is_disabled ? transparent : (touch.has-hover ? #333333 : (is_active ? #2e2e2e : transparent));
+
+    Text {
+        text: root.text;
+        font-size: 14px;
+        color: is_disabled ? #555555 : (touch.has-hover ? #ffffff : #d0d0d0);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        enabled: !root.is_disabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component CommandBarButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> is_active: false;
+    in property <bool> has_dropdown: false;
+    callback clicked();
+
+    height: 36px;
+    border-radius: 4px;
+    background: touch.has-hover ? #323232 : (is_active ? #2d2d2d : transparent);
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 6px;
+        alignment: center;
+
+        Text {
+            text: root.icon;
+            font-size: 14px;
+            vertical-alignment: center;
+            color: touch.has-hover ? #60cdff : #cccccc;
+        }
+
+        if root.label != "": Text {
+            text: root.label;
+            font-size: 12px;
+            font-weight: 500;
+            vertical-alignment: center;
+            color: #e0e0e0;
+        }
+
+        if root.has_dropdown: Text {
+            text: "▾";
+            font-size: 10px;
+            vertical-alignment: center;
+            color: #888888;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> is_selected: false;
+    callback clicked();
+
+    height: 32px;
+    border-radius: 4px;
+    background: is_selected ? #333333 : (touch.has-hover ? #2a2a2a : transparent);
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 10px;
+        alignment: start;
+
+        Text {
+            text: root.icon;
+            font-size: 15px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.label;
+            font-size: 13px;
+            vertical-alignment: center;
+            color: is_selected ? #ffffff : #d0d0d0;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Hyperion Explorer";
+    min_width: 1040px;
+    min_height: 640px;
+    background: #191919;
+    default-font-family: "Segoe UI Variable Text, Segoe UI, sans-serif";
+
+    // State properties
+    in-out property <[TabItem]> tabs: [];
+    in-out property <int> active_tab_index: 0;
+    in-out property <[CrumbItem]> crumbs: [];
+    in-out property <string> current_path: "";
+    in-out property <string> raw_path_text: "";
+    in-out property <bool> is_editing_path: false;
+    in-out property <string> search_text: "";
+    
+    in-out property <bool> can_go_back: false;
+    in-out property <bool> can_go_forward: false;
+    
+    in-out property <[DriveItem]> drives: [];
+    in-out property <[EntryItem]> entries: [];
+    in-out property <int> selected_index: -1;
+    in-out property <string> selected_path: "";
+    
+    in-out property <string> view_mode: "details"; // "details" or "icons"
+    in-out property <string> sort_column: "name";
+    in-out property <bool> sort_asc: true;
+    
+    in-out property <bool> show_preview: false;
+    in-out property <bool> show_details: false;
+    
+    // Preview state
+    in-out property <string> preview_type: "none"; // "text", "table", "image", "archive", "none"
+    in-out property <string> preview_title: "";
+    in-out property <string> preview_subtitle: "";
+    in-out property <string> preview_text_content: "";
+    in-out property <[string]> preview_table_headers: [];
+    in-out property <[PreviewRow]> preview_table_rows: [];
+    
+    // Details pane state
+    in-out property <[PropertyItem]> item_properties: [];
+
+    // Status bar state
+    in-out property <string> status_item_count: "0 items";
+    in-out property <string> status_selection_info: "";
+    
+    // Callbacks to Rust backend
+    callback tab_selected(int);
+    callback tab_closed(int);
+    callback tab_new();
+    
+    callback nav_back();
+    callback nav_forward();
+    callback nav_up();
+    callback nav_refresh();
+    callback nav_to_path(string);
+    callback search_changed(string);
+    
+    callback item_clicked(int);
+    callback item_double_clicked(int);
+    callback item_right_clicked(int);
+    
+    callback command_new_folder();
+    callback command_cut();
+    callback command_copy();
+    callback command_paste();
+    callback command_rename();
+    callback command_delete();
+    callback command_toggle_view();
+    callback command_toggle_preview();
+    callback command_toggle_details();
+    callback sort_by(string);
+
+    VerticalLayout {
+        padding: 0;
+        spacing: 0;
+
+        // 1. TABS HEADER ROW
+        Rectangle {
+            height: 40px;
+            background: #202020;
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                padding-top: 6px;
+                spacing: 4px;
+                alignment: start;
+
+                for tab[idx] in root.tabs: Rectangle {
+                    height: 34px;
+                    min_width: 140px;
+                    max_width: 200px;
+                    border-radius: 6px;
+                    background: tab.is_active ? #2c2c2c : (tab_touch.has-hover ? #252525 : transparent);
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 6px;
+                        spacing: 8px;
+                        alignment: center;
+
+                        Text {
+                            text: "📁";
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+
+                        Text {
+                            text: tab.title;
+                            font-size: 12px;
+                            color: tab.is_active ? #ffffff : #aaaaaa;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+
+                        Rectangle {
+                            width: 20px;
+                            height: 20px;
+                            border-radius: 4px;
+                            background: close_touch.has-hover ? #444444 : transparent;
+
+                            Text {
+                                text: "✕";
+                                font-size: 10px;
+                                color: close_touch.has-hover ? #ffffff : #888888;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            close_touch := TouchArea {
+                                clicked => { root.tab_closed(idx); }
+                            }
+                        }
+                    }
+
+                    tab_touch := TouchArea {
+                        clicked => { root.tab_selected(idx); }
+                    }
+                }
+
+                // New Tab Button (+)
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 6px;
+                    background: new_tab_touch.has-hover ? #2c2c2c : transparent;
+
+                    Text {
+                        text: "＋";
+                        font-size: 14px;
+                        color: new_tab_touch.has-hover ? #ffffff : #aaaaaa;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    new_tab_touch := TouchArea {
+                        clicked => { root.tab_new(); }
+                    }
+                }
+            }
+        }
+
+        // 2. NAVIGATION ROW (Back, Forward, Up, Refresh, Breadcrumbs, Search)
+        Rectangle {
+            height: 44px;
+            background: #252525;
+
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 12px;
+                spacing: 6px;
+                alignment: center;
+
+                IconButton {
+                    text: "←";
+                    is_disabled: !root.can_go_back;
+                    clicked => { root.nav_back(); }
+                }
+
+                IconButton {
+                    text: "→";
+                    is_disabled: !root.can_go_forward;
+                    clicked => { root.nav_forward(); }
+                }
+
+                IconButton {
+                    text: "↑";
+                    clicked => { root.nav_up(); }
+                }
+
+                IconButton {
+                    text: "↻";
+                    clicked => { root.nav_refresh(); }
+                }
+
+                // Breadcrumb Address Bar
+                Rectangle {
+                    horizontal-stretch: 1;
+                    height: 32px;
+                    border-radius: 4px;
+                    background: #1c1c1c;
+                    border-width: 1px;
+                    border-color: #383838;
+
+                    if !root.is_editing_path: HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 4px;
+                        alignment: start;
+
+                        Text {
+                            text: "💻";
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+
+                        for crumb[c_idx] in root.crumbs: HorizontalLayout {
+                            spacing: 4px;
+                            alignment: center;
+
+                            Rectangle {
+                                border-radius: 3px;
+                                background: crumb_touch.has-hover ? #2f2f2f : transparent;
+                                height: 26px;
+
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    padding-right: 6px;
+                                    alignment: center;
+
+                                    Text {
+                                        text: crumb.label;
+                                        font-size: 12px;
+                                        color: crumb_touch.has-hover ? #ffffff : #d0d0d0;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                crumb_touch := TouchArea {
+                                    clicked => { root.nav_to_path(crumb.path); }
+                                }
+                            }
+
+                            Text {
+                                text: "›";
+                                font-size: 12px;
+                                color: #666666;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    if root.is_editing_path: LineEdit {
+                        text <=> root.raw_path_text;
+                        accepted(text) => {
+                            root.is_editing_path = false;
+                            root.nav_to_path(text);
+                        }
+                    }
+
+                    // Click area on empty space to switch into path edit mode
+                    if !root.is_editing_path: TouchArea {
+                        clicked => {
+                            root.raw_path_text = root.current_path;
+                            root.is_editing_path = true;
+                        }
+                    }
+                }
+
+                // Instant Search Box
+                Rectangle {
+                    width: 240px;
+                    height: 32px;
+                    border-radius: 4px;
+                    background: #1c1c1c;
+                    border-width: 1px;
+                    border-color: #383838;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 6px;
+                        alignment: center;
+
+                        Text {
+                            text: "🔍";
+                            font-size: 12px;
+                            color: #888888;
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            horizontal-stretch: 1;
+                            placeholder-text: "Search (instant MFT)...";
+                            text <=> root.search_text;
+                            edited(text) => {
+                                root.search_changed(text);
+                            }
+                        }
+
+                        if root.search_text != "": Rectangle {
+                            width: 18px;
+                            height: 18px;
+                            border-radius: 9px;
+                            background: clear_search_touch.has-hover ? #444444 : transparent;
+
+                            Text {
+                                text: "✕";
+                                font-size: 10px;
+                                color: #aaaaaa;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            clear_search_touch := TouchArea {
+                                clicked => {
+                                    root.search_text = "";
+                                    root.search_changed("");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. COMMAND BAR (New, Cut, Copy, Paste, Rename, Delete, Sort, View, Details, Preview)
+        Rectangle {
+            height: 42px;
+            background: #252525;
+
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 12px;
+                spacing: 4px;
+                alignment: center;
+
+                CommandBarButton {
+                    icon: "＋";
+                    label: "New";
+                    has_dropdown: true;
+                    clicked => { root.command_new_folder(); }
+                }
+
+                Rectangle { width: 1px; height: 20px; background: #383838; }
+
+                CommandBarButton {
+                    icon: "✂";
+                    clicked => { root.command_cut(); }
+                }
+
+                CommandBarButton {
+                    icon: "📋";
+                    clicked => { root.command_copy(); }
+                }
+
+                CommandBarButton {
+                    icon: "📄";
+                    clicked => { root.command_paste(); }
+                }
+
+                CommandBarButton {
+                    icon: "🏷";
+                    clicked => { root.command_rename(); }
+                }
+
+                CommandBarButton {
+                    icon: "🗑";
+                    clicked => { root.command_delete(); }
+                }
+
+                Rectangle { width: 1px; height: 20px; background: #383838; }
+
+                CommandBarButton {
+                    icon: "⇅";
+                    label: "Sort";
+                    has_dropdown: true;
+                    clicked => { root.sort_by(root.sort_column); }
+                }
+
+                CommandBarButton {
+                    icon: root.view_mode == "details" ? "☰" : "☷";
+                    label: root.view_mode == "details" ? "Details" : "Icons";
+                    clicked => { root.command_toggle_view(); }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                CommandBarButton {
+                    icon: "ℹ";
+                    label: "Details";
+                    is_active: root.show_details;
+                    clicked => { root.command_toggle_details(); }
+                }
+
+                CommandBarButton {
+                    icon: "👁";
+                    label: "Preview";
+                    is_active: root.show_preview;
+                    clicked => { root.command_toggle_preview(); }
+                }
+            }
+        }
+
+        // 4. MAIN WORKSPACE (Navigation Pane + Content View + Preview/Details Pane)
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: 0;
+
+            // Navigation Pane (Sidebar)
+            Rectangle {
+                width: 220px;
+                background: #1f1f1f;
+
+                ScrollView {
+                    VerticalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        padding-top: 10px;
+                        spacing: 2px;
+                        alignment: start;
+
+                        // Quick Access Header
+                        Text {
+                            text: "Quick access";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: #888888;
+                        }
+
+                        NavItem { icon: "🏠"; label: "Home"; clicked => { root.nav_to_path("home"); } }
+                        NavItem { icon: "🖥️"; label: "Desktop"; clicked => { root.nav_to_path("desktop"); } }
+                        NavItem { icon: "⬇️"; label: "Downloads"; clicked => { root.nav_to_path("downloads"); } }
+                        NavItem { icon: "📄"; label: "Documents"; clicked => { root.nav_to_path("documents"); } }
+                        NavItem { icon: "🖼️"; label: "Pictures"; clicked => { root.nav_to_path("pictures"); } }
+                        NavItem { icon: "🎵"; label: "Music"; clicked => { root.nav_to_path("music"); } }
+                        NavItem { icon: "🎬"; label: "Videos"; clicked => { root.nav_to_path("videos"); } }
+
+                        Rectangle { height: 10px; }
+
+                        // This PC Header
+                        Text {
+                            text: "This PC";
+                            font-size: 11px;
+                            font-weight: 600;
+                            color: #888888;
+                        }
+
+                        for drive in root.drives: Rectangle {
+                            height: 52px;
+                            border-radius: 4px;
+                            background: drive_touch.has-hover ? #2a2a2a : transparent;
+
+                            VerticalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                padding-top: 6px;
+                                spacing: 4px;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: center;
+
+                                    Text {
+                                        text: "💽";
+                                        font-size: 16px;
+                                        vertical-alignment: center;
+                                    }
+
+                                    VerticalLayout {
+                                        spacing: 1px;
+                                        horizontal-stretch: 1;
+
+                                        Text {
+                                            text: drive.name + " (" + drive.letter + ")";
+                                            font-size: 12px;
+                                            font-weight: 500;
+                                            color: #e0e0e0;
+                                            overflow: elide;
+                                        }
+
+                                        Text {
+                                            text: drive.free_str + " free of " + drive.total_str;
+                                            font-size: 10px;
+                                            color: #888888;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+
+                                // Storage Bar
+                                Rectangle {
+                                    height: 4px;
+                                    border-radius: 2px;
+                                    background: #383838;
+
+                                    Rectangle {
+                                        x: 0;
+                                        width: parent.width * drive.percent_used;
+                                        height: parent.height;
+                                        border-radius: 2px;
+                                        background: drive.percent_used > 0.9 ? #e81123 : #0078d4;
+                                    }
+                                }
+                            }
+
+                            drive_touch := TouchArea {
+                                clicked => { root.nav_to_path(drive.letter); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Main Content Area (Details View or Icons View)
+            Rectangle {
+                horizontal-stretch: 1;
+                background: #191919;
+
+                VerticalLayout {
+                    spacing: 0;
+
+                    // Table Column Headers (Details View only)
+                    if root.view_mode == "details": Rectangle {
+                        height: 32px;
+                        background: #202020;
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            spacing: 12px;
+                            alignment: center;
+
+                            // Name Column
+                            Rectangle {
+                                horizontal-stretch: 3;
+                                height: 30px;
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Text {
+                                        text: "Name " + (root.sort_column == "name" ? (root.sort_asc ? "↑" : "↓") : "");
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        color: root.sort_column == "name" ? #ffffff : #a0a0a0;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                TouchArea { clicked => { root.sort_by("name"); } }
+                            }
+
+                            // Date modified Column
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 30px;
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Text {
+                                        text: "Date modified " + (root.sort_column == "date" ? (root.sort_asc ? "↑" : "↓") : "");
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        color: root.sort_column == "date" ? #ffffff : #a0a0a0;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                TouchArea { clicked => { root.sort_by("date"); } }
+                            }
+
+                            // Type Column
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 30px;
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Text {
+                                        text: "Type " + (root.sort_column == "type" ? (root.sort_asc ? "↑" : "↓") : "");
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        color: root.sort_column == "type" ? #ffffff : #a0a0a0;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                TouchArea { clicked => { root.sort_by("type"); } }
+                            }
+
+                            // Size Column
+                            Rectangle {
+                                width: 90px;
+                                height: 30px;
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Text {
+                                        text: "Size " + (root.sort_column == "size" ? (root.sort_asc ? "↑" : "↓") : "");
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        color: root.sort_column == "size" ? #ffffff : #a0a0a0;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: right;
+                                    }
+                                }
+                                TouchArea { clicked => { root.sort_by("size"); } }
+                            }
+                        }
+                    }
+
+                    // Content List (Details View)
+                    if root.view_mode == "details": ScrollView {
+                        VerticalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            padding-top: 4px;
+                            padding-bottom: 4px;
+                            spacing: 1px;
+                            alignment: start;
+
+                            for entry[e_idx] in root.entries: Rectangle {
+                                height: 34px;
+                                border-radius: 4px;
+                                background: root.selected_index == e_idx ? #2d3848 : (row_touch.has-hover ? #252525 : transparent);
+                                border-width: root.selected_index == e_idx ? 1px : 0px;
+                                border-color: #0078d4;
+
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    spacing: 12px;
+                                    alignment: center;
+
+                                    // Name + Icon
+                                    HorizontalLayout {
+                                        horizontal-stretch: 3;
+                                        spacing: 8px;
+                                        alignment: center;
+
+                                        Text {
+                                            text: entry.icon_glyph;
+                                            font-size: 16px;
+                                            color: entry.icon_color;
+                                            vertical-alignment: center;
+                                        }
+
+                                        Text {
+                                            text: entry.name;
+                                            font-size: 13px;
+                                            color: root.selected_index == e_idx ? #ffffff : #e0e0e0;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                            horizontal-stretch: 1;
+                                        }
+                                    }
+
+                                    // Date modified
+                                    Text {
+                                        horizontal-stretch: 1;
+                                        text: entry.mtime_str;
+                                        font-size: 12px;
+                                        color: #909090;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+
+                                    // Type
+                                    Text {
+                                        horizontal-stretch: 1;
+                                        text: entry.type_str;
+                                        font-size: 12px;
+                                        color: #909090;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+
+                                    // Size
+                                    Text {
+                                        width: 90px;
+                                        text: entry.size_str;
+                                        font-size: 12px;
+                                        color: #909090;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: right;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                row_touch := TouchArea {
+                                    clicked => { root.item_clicked(e_idx); }
+                                    double-clicked => { root.item_double_clicked(e_idx); }
+                                    pointer-event(pe) => {
+                                        if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
+                                            root.item_right_clicked(e_idx);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Content Grid (Icons View)
+                    if root.view_mode == "icons": ScrollView {
+                        HorizontalLayout {
+                            padding: 16px;
+                            spacing: 12px;
+                            alignment: start;
+
+                            VerticalLayout {
+                                spacing: 12px;
+
+                                for entry[e_idx] in root.entries: Rectangle {
+                                    width: 100px;
+                                    height: 100px;
+                                    border-radius: 6px;
+                                    background: root.selected_index == e_idx ? #2d3848 : (grid_touch.has-hover ? #252525 : transparent);
+                                    border-width: root.selected_index == e_idx ? 1px : 0px;
+                                    border-color: #0078d4;
+
+                                    VerticalLayout {
+                                        padding: 8px;
+                                        spacing: 6px;
+                                        alignment: center;
+
+                                        Text {
+                                            text: entry.icon_glyph;
+                                            font-size: 36px;
+                                            color: entry.icon_color;
+                                            horizontal-alignment: center;
+                                        }
+
+                                        Text {
+                                            text: entry.name;
+                                            font-size: 11px;
+                                            color: #e0e0e0;
+                                            horizontal-alignment: center;
+                                            overflow: elide;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+
+                                    grid_touch := TouchArea {
+                                        clicked => { root.item_clicked(e_idx); }
+                                        double-clicked => { root.item_double_clicked(e_idx); }
+                                        pointer-event(pe) => {
+                                            if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
+                                                root.item_right_clicked(e_idx);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Preview Pane (Collapsible)
+            if root.show_preview: Rectangle {
+                width: 340px;
+                background: #1c1c1c;
+
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 12px;
+
+                    // Preview Header
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: center;
+
+                        Text {
+                            text: "👁";
+                            font-size: 16px;
+                            vertical-alignment: center;
+                        }
+
+                        VerticalLayout {
+                            spacing: 2px;
+                            horizontal-stretch: 1;
+
+                            Text {
+                                text: root.preview_title != "" ? root.preview_title : "Preview";
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: #ffffff;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: root.preview_subtitle;
+                                font-size: 11px;
+                                color: #888888;
+                                overflow: elide;
+                            }
+                        }
+
+                        IconButton {
+                            text: "✕";
+                            clicked => { root.command_toggle_preview(); }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: #303030; }
+
+                    // Spreadsheet / Table Preview (Excel & CSV)
+                    if root.preview_type == "table": ScrollView {
+                        VerticalLayout {
+                            spacing: 2px;
+                            alignment: start;
+
+                            // Table Header Row
+                            Rectangle {
+                                height: 26px;
+                                background: #282828;
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    padding-right: 6px;
+                                    spacing: 8px;
+                                    for h in root.preview_table_headers: Text {
+                                        text: h;
+                                        font-size: 11px;
+                                        font-weight: 600;
+                                        color: #60cdff;
+                                        overflow: elide;
+                                        width: 80px;
+                                    }
+                                }
+                            }
+
+                            // Table Data Rows
+                            for row in root.preview_table_rows: Rectangle {
+                                height: 24px;
+                                background: #202020;
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    padding-right: 6px;
+                                    spacing: 8px;
+                                    for cell in row.cells: Text {
+                                        text: cell;
+                                        font-size: 11px;
+                                        color: #d0d0d0;
+                                        overflow: elide;
+                                        width: 80px;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Text / Code / Word / Markdown Preview
+                    if root.preview_type == "text": ScrollView {
+                        Text {
+                            text: root.preview_text_content;
+                            font-family: "Consolas, Courier New, monospace";
+                            font-size: 12px;
+                            color: #dcdcdc;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    // No preview or empty state
+                    if root.preview_type == "none": VerticalLayout {
+                        alignment: center;
+                        spacing: 8px;
+                        horizontal-stretch: 1;
+
+                        Text {
+                            text: "Select a file to preview.";
+                            font-size: 13px;
+                            color: #777777;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // Details Pane (Collapsible)
+            if root.show_details: Rectangle {
+                width: 280px;
+                background: #1c1c1c;
+
+                VerticalLayout {
+                    padding: 14px;
+                    spacing: 12px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: center;
+
+                        Text {
+                            text: "ℹ";
+                            font-size: 16px;
+                            vertical-alignment: center;
+                        }
+
+                        Text {
+                            text: "Details";
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: #ffffff;
+                            horizontal-stretch: 1;
+                        }
+
+                        IconButton {
+                            text: "✕";
+                            clicked => { root.command_toggle_details(); }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: #303030; }
+
+                    ScrollView {
+                        VerticalLayout {
+                            spacing: 8px;
+                            alignment: start;
+
+                            for prop in root.item_properties: VerticalLayout {
+                                spacing: 2px;
+                                Text {
+                                    text: prop.name;
+                                    font-size: 11px;
+                                    color: #888888;
+                                }
+                                Text {
+                                    text: prop.value;
+                                    font-size: 12px;
+                                    color: #e0e0e0;
+                                    wrap: word-wrap;
+                                }
+                                Rectangle { height: 1px; background: #262626; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. STATUS BAR
+        Rectangle {
+            height: 28px;
+            background: #202020;
+
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 16px;
+                alignment: center;
+
+                Text {
+                    text: root.status_item_count;
+                    font-size: 11px;
+                    color: #999999;
+                    vertical-alignment: center;
+                }
+
+                if root.status_selection_info != "": Text {
+                    text: root.status_selection_info;
+                    font-size: 11px;
+                    color: #999999;
+                    vertical-alignment: center;
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // Small view mode buttons
+                IconButton {
+                    text: "☰";
+                    is_active: root.view_mode == "details";
+                    clicked => {
+                        root.view_mode = "details";
+                    }
+                }
+
+                IconButton {
+                    text: "☷";
+                    is_active: root.view_mode == "icons";
+                    clicked => {
+                        root.view_mode = "icons";
+                    }
+                }
+            }
+        }
+    }
+}

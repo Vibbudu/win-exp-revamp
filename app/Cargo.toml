@@ -1,0 +1,21 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+ipc-types = { workspace = true }
+fs-core = { workspace = true }
+shell-interop = { workspace = true }
+indexer = { workspace = true }
+preview = { workspace = true }
+crossbeam-channel = { workspace = true }
+rayon = { workspace = true }
+windows = { workspace = true }
+parking_lot = { workspace = true }
+slint = { version = "1.18.1", features = ["compat-1-2", "renderer-femtovg", "renderer-software"] }
+
+[build-dependencies]
+slint-build = "1.18.1"

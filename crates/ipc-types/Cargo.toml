@@ -1,0 +1,9 @@
+[package]
+name = "ipc-types"
+description = "Shared IPC types between the Rust backend and the TypeScript UI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }

@@ -1,0 +1,17 @@
+[package]
+name = "preview"
+description = "Universal file preview generator: Excel, Word, PowerPoint, PDF, Code, Markdown, Media, Archives"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ipc-types = { workspace = true }
+fs-core = { workspace = true }
+shell-interop = { workspace = true }
+calamine = { workspace = true }
+zip = { workspace = true }
+quick-xml = { workspace = true }
+pulldown-cmark = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }

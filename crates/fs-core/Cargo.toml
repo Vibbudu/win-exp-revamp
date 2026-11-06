@@ -1,0 +1,12 @@
+[package]
+name = "fs-core"
+description = "Fast directory enumeration, natural sorting and folder views"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ipc-types = { workspace = true }
+rayon = { workspace = true }
+anyhow = { workspace = true }
+windows = { workspace = true }
