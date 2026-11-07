@@ -142,48 +142,73 @@ pub fn has_visual_thumbnail(ext: &str) -> bool {
     )
 }
 
-/// Detects whether a file/folder resides on a cloud-backed filesystem (Google Drive `DriveFS`,
-/// OneDrive, iCloud, Dropbox) or carries cloud placeholder/reparse attributes so the UI can
-/// render the Windows 11 cloud sync overlay badge on the bottom-left of its icon/thumbnail.
-pub fn is_cloud_synced_item(path: &str, attrs: u32, cloud_roots: &[String]) -> bool {
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloudSyncState {
+    None,
+    Cloud,    // Online only: white cloud with blue outline
+    Pinned,   // Available offline: solid circle with checkmark
+    Syncing,  // Sync in progress: spinning sync arrows
+    Error,    // Sync warning: warning icon
+}
+
+impl CloudSyncState {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CloudSyncState::None => "none",
+            CloudSyncState::Cloud => "cloud",
+            CloudSyncState::Pinned => "pinned",
+            CloudSyncState::Syncing => "syncing",
+            CloudSyncState::Error => "error",
+        }
+    }
+}
+
+/// Detects specific cloud sync state (cloud-only, pinned/available offline, syncing, or error).
+pub fn detect_cloud_sync_state(path: &str, attrs: u32, cloud_roots: &[String]) -> CloudSyncState {
     const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000;
     const FILE_ATTRIBUTE_RECALL_ON_OPEN: u32 = 0x0004_0000;
     const FILE_ATTRIBUTE_PINNED: u32 = 0x0008_0000;
     const FILE_ATTRIBUTE_UNPINNED: u32 = 0x0010_0000;
     const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x0040_0000;
 
-    if (attrs
-        & (FILE_ATTRIBUTE_OFFLINE
-            | FILE_ATTRIBUTE_RECALL_ON_OPEN
-            | FILE_ATTRIBUTE_PINNED
-            | FILE_ATTRIBUTE_UNPINNED
-            | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS))
-        != 0
-    {
-        return true;
-    }
-
     let p_lower = path.to_ascii_lowercase();
-    if p_lower.contains("\\onedrive")
+    let is_in_cloud = p_lower.contains("\\onedrive")
         || p_lower.contains("\\my drive")
         || p_lower.contains("\\shared drives")
         || p_lower.contains("\\google drive")
         || p_lower.contains("\\icloud")
         || p_lower.contains("\\dropbox")
-    {
-        return true;
+        || cloud_roots.iter().any(|r| path.len() >= r.len() && path[..r.len()].eq_ignore_ascii_case(r));
+
+    if !is_in_cloud && (attrs & (FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_PINNED)) == 0 {
+        return CloudSyncState::None;
     }
 
-    for root in cloud_roots {
-        if path.len() >= root.len() && path[..root.len()].eq_ignore_ascii_case(root) {
-            return true;
+    if (attrs & FILE_ATTRIBUTE_PINNED) != 0 {
+        return CloudSyncState::Pinned;
+    }
+    if (attrs & (FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_UNPINNED)) != 0 {
+        return CloudSyncState::Cloud;
+    }
+
+    if p_lower.ends_with(".tmp") || p_lower.ends_with(".part") || p_lower.contains("~$") {
+        return CloudSyncState::Syncing;
+    }
+
+    if is_in_cloud {
+        if p_lower.ends_with(".gdoc") || p_lower.ends_with(".gsheet") || p_lower.ends_with(".gslides") {
+            CloudSyncState::Cloud
+        } else {
+            CloudSyncState::Pinned
         }
+    } else {
+        CloudSyncState::None
     }
+}
 
-    if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0 && p_lower.contains("drive") {
-        return true;
-    }
-
-    false
+/// Detects whether a file/folder resides on a cloud-backed filesystem (Google Drive `DriveFS`,
+/// OneDrive, iCloud, Dropbox) or carries cloud placeholder/reparse attributes so the UI can
+/// render the Windows 11 cloud sync overlay badge on the bottom-left of its icon/thumbnail.
+pub fn is_cloud_synced_item(path: &str, attrs: u32, cloud_roots: &[String]) -> bool {
+    detect_cloud_sync_state(path, attrs, cloud_roots) != CloudSyncState::None
 }

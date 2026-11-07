@@ -106,3 +106,63 @@ pub fn stat_path(path: &str) -> Option<Entry> {
         name,
     })
 }
+
+
+/// Recursively calculate folder size using Win32 FindFirstFileExW.
+/// Ignores reparse points (symlinks/junctions) to avoid cycles.
+pub fn calculate_folder_size_fast(root_dir: &str, max_files: usize) -> (u64, usize) {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x00000400;
+    let mut total_size: u64 = 0;
+    let mut file_count: usize = 0;
+    let mut stack: Vec<String> = vec![root_dir.trim_end_matches(['\\', '/']).to_string()];
+
+    while let Some(current_dir) = stack.pop() {
+        let pattern = wide(&format!("{current_dir}\\*"));
+        let mut data = WIN32_FIND_DATAW::default();
+        let handle = unsafe {
+            FindFirstFileExW(
+                PCWSTR(pattern.as_ptr()),
+                FindExInfoBasic,
+                &mut data as *mut _ as *mut _,
+                FindExSearchNameMatch,
+                None,
+                FIND_FIRST_EX_LARGE_FETCH,
+            )
+        };
+        let handle = match handle {
+            Ok(h) => h,
+            Err(_) => continue,
+        };
+
+        loop {
+            let name = name_from(&data.cFileName);
+            if name != "." && name != ".." {
+                let is_dir = (data.dwFileAttributes & ATTR_DIRECTORY) != 0;
+                let is_reparse = (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+
+                if is_dir {
+                    if !is_reparse && stack.len() < 256 {
+                        stack.push(format!("{current_dir}\\{name}"));
+                    }
+                } else {
+                    let sz = ((data.nFileSizeHigh as u64) << 32) | (data.nFileSizeLow as u64);
+                    total_size = total_size.saturating_add(sz);
+                    file_count += 1;
+                    if file_count >= max_files {
+                        unsafe { let _ = FindClose(handle); }
+                        return (total_size, file_count);
+                    }
+                }
+            }
+
+            if unsafe { FindNextFileW(handle, &mut data) }.is_err() {
+                break;
+            }
+        }
+        unsafe {
+            let _ = FindClose(handle);
+        }
+    }
+
+    (total_size, file_count)
+}

@@ -12,7 +12,7 @@ mod win;
 
 pub use natural::natural_cmp;
 pub use raw::{RawEntry, enumerate_raw};
-pub use win::{filetime_to_unix_ms, list_dir, stat_path};
+pub use win::{calculate_folder_size_fast, filetime_to_unix_ms, list_dir, stat_path};
 
 use ipc_types::{Entry, SortKey, SortSpec};
 use rayon::prelude::*;
