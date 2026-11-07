@@ -133,6 +133,30 @@ cargo run -p app
 
 ## 7. Chronological Change Log
 
+### [2026-11-07] - This PC Tab & Header Parity, Async Folder Sizes, In-Workspace Drag-and-Drop, Multi-State Google Drive Sync Overlays, Drive Deduplication & Background Context Menu
+- **Author/Model**: Gemini (High) / Antigravity Pair Programmer
+- **Description**:
+  1. **New Tab Standard Location & Tab Icon Parity**:
+     - Updated tab creation logic so opening a new tab opens "This PC" rather than duplicating the current directory, matching Windows 11 default start page behavior.
+     - Added distinct tab icon rendering: "This PC" tabs display the native Windows 11 blue desktop monitor icon (\u{EC4E}), Network tabs display \u{E968}, and folder tabs display vector folder icons.
+  2. **This PC Layout (Single-Click Select, Double-Click Enter)**:
+     - Updated drive card interactions so single-clicking selects and highlights the drive (updating status bar and Details pane properties), while double-clicking navigates into the drive.
+     - Cleaned "Devices and drives" header by removing the redundant item count.
+  3. **Sidebar Drive Label Deduplication**:
+     - Implemented ormat_drive_display_name to prevent redundant drive letter suffixes when the volume label already contains the drive specifier (fixing "MAIN (C:) (C:)" and "Google Drive (G:) (G:)").
+  4. **Asynchronous Progressive Folder Size Calculation**:
+     - Implemented calculate_folder_size_fast in s-core using stack-based FindFirstFileExW enumeration.
+     - Integrated bounded FolderSizeCache and low-priority background worker that computes folder sizes without blocking the UI and updates size_str progressively in the Details view.
+  5. **Empty Space Background Context Menu & Deselection**:
+     - Added background TouchArea to Details and Grid scroll views.
+     - Right-clicking empty space invokes native Windows Shell ackground_menu ("Open in Terminal", "New", "Sort by", "View", "Properties"). Left-clicking empty space deselects all items.
+  6. **Multi-State Google Drive Sync Status Overlays**:
+     - Added CloudSyncState enum and detect_cloud_sync_state supporting distinct states: online-only cloud (\u{E753}), pinned/offline available (\u{E73E}), syncing in progress (\u{E895}), and error (\u{E7BA}).
+  7. **In-Workspace Drag-and-Drop (Folders & Tabs)**:
+     - Implemented in-app drag and drop allowing files to be dragged into folders in the same directory, into the sidebar, and across tabs with spring-loading.
+- **Files Modified**:
+  - crates/fs-core/src/win.rs, crates/fs-core/src/lib.rs, crates/shell-interop/src/icons.rs, pp/ui/main.slint, pp/src/main.rs, AGENTS.md.
+
 ### [2026-11-06] — Windows 11 Compact View, Single-Border Address/Search Bar, Draggable Column Resizers, LruCache Thumbnails, Cloud Sync Badges, Cross-App Drag-and-Drop, Mouse Side-Button Nav & WinRT PDF Page Rendering
 - **Author/Model**: Gemini (High) / Antigravity Pair Programmer
 - **Description**:

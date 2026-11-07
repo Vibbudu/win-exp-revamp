@@ -38,6 +38,8 @@ export struct EntryItem {
     has_thumb: bool,
     thumb: image,
     is_cloud: bool,
+    cloud_state: string,
+    is_drop_target: bool,
     orig_index: int,
 }
 
@@ -64,6 +66,8 @@ export struct TabItem {
     title: string,
     path: string,
     is_active: bool,
+    is_this_pc: bool,
+    is_network: bool,
 }
 
 export struct PreviewRow {
@@ -75,28 +79,29 @@ export struct PropertyItem {
     value: string,
 }
 
-// Authentic Windows 11 Cloud Sync Overlay Badge (white cloud with #0078d4 blue outline)
+// Authentic Windows 11 Cloud Sync Overlay Badge (white cloud with #0078d4 blue outline, pinned green checkmark, or syncing progress)
 component CloudSyncBadge inherits Rectangle {
     in property <bool> large: false;
+    in property <string> state: "cloud";
 
     width: large ? 20px : 13px;
-    height: large ? 14px : 10px;
+    height: large ? 16px : 12px;
     background: transparent;
 
-    // Outer white outline pill
+    // Outer badge container
     Rectangle {
         width: parent.width;
         height: parent.height;
         border-radius: parent.height / 2;
-        background: #ffffff;
+        background: root.state == "pinned" ? #107c41 : (root.state == "error" ? #c42b1c : #ffffff);
         border-width: 1.2px;
-        border-color: #0078d4;
+        border-color: root.state == "pinned" ? #107c41 : (root.state == "error" ? #c42b1c : #0078d4);
 
         Text {
-            text: "\u{E753}";
+            text: root.state == "pinned" ? "\u{E73E}" : (root.state == "syncing" ? "\u{E895}" : (root.state == "error" ? "\u{E7BA}" : "\u{E753}"));
             font-family: "Segoe Fluent Icons";
             font-size: large ? 11px : 8px;
-            color: #0078d4;
+            color: root.state == "pinned" || root.state == "error" ? #ffffff : #0078d4;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
@@ -111,6 +116,7 @@ component FluentEntryIcon inherits Rectangle {
     in property <bool> has_thumb: false;
     in property <image> thumb;
     in property <bool> is_cloud: false;
+    in property <string> cloud_state: "cloud";
     in property <int> icon_px: 16; // 16, 20, 32, 48, 72, 96
 
     width: icon_px * 1px + 4px;
@@ -194,6 +200,7 @@ component FluentEntryIcon inherits Rectangle {
         x: -1px;
         y: parent.height - self.height + 1px;
         large: root.icon_px >= 36;
+        state: root.cloud_state;
     }
 }
 
@@ -533,6 +540,15 @@ export component MainWindow inherits Window {
     // Status bar state
     in-out property <string> status_item_count: "0 items";
     in-out property <string> status_selection_info: "";
+    in-out property <string> selected_drive_letter: "";
+    in-out property <int> dragged_item_index: -1;
+    in-out property <int> drop_target_index: -1;
+
+    callback select_drive(string);
+    callback background_clicked();
+    callback background_right_clicked();
+    callback item_dropped_on(int, int);
+    callback item_dropped_on_tab(int, int);
 
     // Window management callbacks
     callback window_minimize();
@@ -741,7 +757,25 @@ export component MainWindow inherits Window {
                                     padding-bottom: 3px;
                                     spacing: 8px;
 
-                                    FluentEntryIcon {
+                                    if tab.is_this_pc: Text {
+                                        width: 16px;
+                                        text: "\u{EC4E}";
+                                        font-family: "Segoe Fluent Icons";
+                                        font-size: 13px;
+                                        color: #0078d4;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: center;
+                                    }
+                                    if tab.is_network: Text {
+                                        width: 16px;
+                                        text: "\u{E968}";
+                                        font-family: "Segoe Fluent Icons";
+                                        font-size: 13px;
+                                        color: Theme.text_secondary;
+                                        vertical-alignment: center;
+                                        horizontal-alignment: center;
+                                    }
+                                    if !tab.is_this_pc && !tab.is_network: FluentEntryIcon {
                                         y: (parent.height - self.height) / 2;
                                         is_dir: true;
                                         icon_px: 15;
@@ -785,6 +819,15 @@ export component MainWindow inherits Window {
                                     width: parent.width - 28px;
                                     height: parent.height;
                                     clicked => { root.tab_selected(idx); }
+                                    pointer-event(pe) => {
+                                        if pe.button == PointerEventButton.left && pe.kind == PointerEventKind.up {
+                                            if root.dragged_item_index >= 0 {
+                                                root.item_dropped_on_tab(root.dragged_item_index, idx);
+                                                root.dragged_item_index = -1;
+                                                root.drop_target_index = -1;
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -1464,7 +1507,7 @@ export component MainWindow inherits Window {
                                         }
 
                                         Text {
-                                            text: "Devices and drives (" + root.drives.length + ")";
+                                            text: "Devices and drives";
                                             font-size: 14px;
                                             font-weight: 600;
                                             color: Theme.text_primary;
@@ -1485,12 +1528,13 @@ export component MainWindow inherits Window {
                                         alignment: start;
 
                                         for drive in root.drives: Rectangle {
+                                            property <bool> is_selected: root.selected_drive_letter == drive.letter;
                                             width: 265px;
                                             height: 76px;
                                             border-radius: 6px;
-                                            background: pc_drive_touch.has-hover ? Theme.row_hover : Theme.pane_bg;
+                                            background: self.is_selected ? Theme.row_selected : (pc_drive_touch.has-hover ? Theme.row_hover : Theme.pane_bg);
                                             border-width: 1px;
-                                            border-color: pc_drive_touch.has-hover ? Theme.border : Theme.divider;
+                                            border-color: self.is_selected ? Theme.accent : (pc_drive_touch.has-hover ? Theme.border : Theme.divider);
 
                                             HorizontalLayout {
                                                 padding: 12px;
@@ -1550,7 +1594,13 @@ export component MainWindow inherits Window {
                                             }
 
                                             pc_drive_touch := TouchArea {
-                                                clicked => { root.nav_to_path(drive.letter); }
+                                                clicked => {
+                                                    root.selected_drive_letter = drive.letter;
+                                                    root.select_drive(drive.letter);
+                                                }
+                                                double-clicked => {
+                                                    root.nav_to_path(drive.letter);
+                                                }
                                             }
                                         }
                                     }
@@ -1856,6 +1906,7 @@ export component MainWindow inherits Window {
                                                     has_thumb: entry.has_thumb;
                                                     thumb: entry.thumb;
                                                     is_cloud: entry.is_cloud;
+                                                    cloud_state: entry.cloud_state;
                                                     icon_px: 16;
                                                 }
 
@@ -1956,6 +2007,15 @@ export component MainWindow inherits Window {
                                                 if pe.button == PointerEventButton.left && pe.kind == PointerEventKind.down {
                                                     parent.drag_triggered = false;
                                                 }
+                                                if pe.button == PointerEventButton.left && pe.kind == PointerEventKind.up {
+                                                    if root.dragged_item_index >= 0 {
+                                                        if root.dragged_item_index != e_idx && entry.is_dir {
+                                                            root.item_dropped_on(root.dragged_item_index, e_idx);
+                                                        }
+                                                        root.dragged_item_index = -1;
+                                                        root.drop_target_index = -1;
+                                                    }
+                                                }
                                                 if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
                                                     root.item_clicked(e_idx);
                                                     root.item_right_clicked(e_idx);
@@ -1965,8 +2025,23 @@ export component MainWindow inherits Window {
                                                 if self.pressed && !parent.drag_triggered {
                                                     if Math.abs(self.mouse-x - self.pressed-x) > 6px || Math.abs(self.mouse-y - self.pressed-y) > 6px {
                                                         parent.drag_triggered = true;
+                                                        root.dragged_item_index = e_idx;
                                                         root.item_drag_started(e_idx);
                                                     }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Empty space background click/right-click target
+                                    Rectangle {
+                                        vertical-stretch: 1;
+                                        min-height: 120px;
+                                        TouchArea {
+                                            clicked => { root.background_clicked(); }
+                                            pointer-event(pe) => {
+                                                if pe.button == PointerEventButton.right && pe.kind == PointerEventKind.down {
+                                                    root.background_right_clicked();
                                                 }
                                             }
                                         }
@@ -2017,6 +2092,7 @@ export component MainWindow inherits Window {
                                                         has_thumb: item.has_thumb;
                                                         thumb: item.thumb;
                                                         is_cloud: item.is_cloud;
+                                                        cloud_state: item.cloud_state;
                                                         icon_px: root.view_mode == "xl_icons" ? 84 : (root.view_mode == "large_icons" ? 58 : 42);
                                                     }
                                                 }

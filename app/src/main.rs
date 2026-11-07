@@ -71,6 +71,22 @@ fn get_cursor_point() -> POINT {
     pt
 }
 
+fn format_drive_display_name(label: &str, drive_path: &str) -> String {
+    let drive_clean = drive_path.trim_end_matches('\\');
+    let paren_drive = format!("({drive_clean})");
+    let trimmed_label = label.trim();
+
+    if trimmed_label.is_empty() {
+        format!("Local Disk ({drive_clean})")
+    } else if trimmed_label.to_ascii_uppercase().contains(&paren_drive.to_ascii_uppercase()) {
+        trimmed_label.to_string()
+    } else {
+        format!("{trimmed_label} ({drive_clean})")
+    }
+}
+
+type FolderSizeCache = Arc<parking_lot::Mutex<lru::LruCache<PathBuf, (u64, String)>>>;
+
 fn format_bytes(bytes: u64) -> String {
     if bytes == 0 {
         return "0 KB".to_string();
@@ -407,12 +423,14 @@ fn map_entries_and_schedule_thumbs(
     cloud_roots: &[String],
     view_mode: &str,
     thumb_cache: &ThumbCache,
+    folder_size_cache: &FolderSizeCache,
     sta_pool: &Arc<shell_interop::StaPool>,
     ui_weak: slint::Weak<MainWindow>,
     dir_gen: u64,
     active_dir_gen: &Arc<AtomicU64>,
 ) -> Vec<EntryItem> {
     let mut uncached_requests: Vec<(usize, String, String)> = Vec::new();
+    let mut dirs_to_size: Vec<(usize, String)> = Vec::new();
     let target_px: u32 = match view_mode {
         "xl_icons" | "large_icons" | "icons" | "tiles" | "content" => 96,
         _ => 32,
@@ -441,16 +459,26 @@ fn map_entries_and_schedule_thumbs(
                 }
             }
 
+            let cloud_state = shell_interop::icons::detect_cloud_sync_state(&e.path, e.attrs, cloud_roots);
+            let size_str = if e.is_dir {
+                if let Some((_, s)) = folder_size_cache.lock().get(&PathBuf::from(&e.path)) {
+                    s.clone()
+                } else {
+                    if dirs_to_size.len() < 80 {
+                        dirs_to_size.push((i, e.path.clone()));
+                    }
+                    String::new()
+                }
+            } else {
+                format_bytes(e.size)
+            };
+
             EntryItem {
                 id: format!("{i}").into(),
                 name: display_name.into(),
                 path: e.path.clone().into(),
                 is_dir: e.is_dir,
-                size_str: if e.is_dir && e.size == 0 {
-                    "".into()
-                } else {
-                    format_bytes(e.size).into()
-                },
+                size_str: size_str.into(),
                 mtime_str: format_mtime(e.modified).into(),
                 type_str: type_name.into(),
                 icon_glyph: icon.into(),
@@ -458,10 +486,43 @@ fn map_entries_and_schedule_thumbs(
                 has_thumb,
                 thumb: thumb_img,
                 is_cloud,
+                cloud_state: cloud_state.as_str().into(),
+                is_drop_target: false,
                 orig_index: i as i32,
             }
         })
         .collect();
+
+    if !dirs_to_size.is_empty() {
+        let size_cache = Arc::clone(folder_size_cache);
+        let gen_arc = Arc::clone(active_dir_gen);
+        let ui_w = ui_weak.clone();
+
+        std::thread::spawn(move || {
+            for (row_idx, dir_path) in dirs_to_size {
+                if gen_arc.load(Ordering::Relaxed) != dir_gen {
+                    break;
+                }
+                let (sz, _) = fs_core::calculate_folder_size_fast(&dir_path, 200_000);
+                if gen_arc.load(Ordering::Relaxed) != dir_gen {
+                    break;
+                }
+                let s_str = format_bytes(sz);
+                size_cache.lock().put(PathBuf::from(&dir_path), (sz, s_str.clone()));
+
+                let ui_target = ui_w.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_target.upgrade() {
+                        let entries = ui.get_entries();
+                        if let Some(mut item) = entries.row_data(row_idx) {
+                            item.size_str = s_str.into();
+                            entries.set_row_data(row_idx, item);
+                        }
+                    }
+                });
+            }
+        });
+    }
 
     if !uncached_requests.is_empty() {
         let cache = Arc::clone(thumb_cache);
@@ -783,6 +844,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let thumb_cache: ThumbCache = Arc::new(Mutex::new(LruCache::new(
         NonZeroUsize::new(256).unwrap(),
     )));
+    let folder_size_cache: FolderSizeCache = Arc::new(parking_lot::Mutex::new(lru::LruCache::new(std::num::NonZeroUsize::new(1024).unwrap())));
     let active_dir_gen = Arc::new(AtomicU64::new(1));
     let search_gen = Arc::new(AtomicU64::new(0));
 
@@ -816,11 +878,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
             DriveItem {
                 letter: d.path.clone().into(),
-                name: if d.label.is_empty() {
-                    format!("Local Disk ({})", d.path.trim_end_matches('\\')).into()
-                } else {
-                    format!("{} ({})", d.label, d.path.trim_end_matches('\\')).into()
-                },
+                name: format_drive_display_name(&d.label, &d.path).into(),
                 free_str: format_bytes(free).into(),
                 total_str: format_bytes(total).into(),
                 percent_used: percent,
@@ -876,6 +934,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let main_window_weak = main_window.as_weak();
         let state = Rc::clone(&state);
         let thumb_cache = Arc::clone(&thumb_cache);
+        let folder_size_cache = Arc::clone(&folder_size_cache);
         let sta_pool = Arc::clone(&sta_pool);
         let active_dir_gen = Arc::clone(&active_dir_gen);
 
@@ -939,6 +998,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 &cloud_roots,
                 &view_mode,
                 &thumb_cache,
+                &folder_size_cache,
                 &sta_pool,
                 main_window_weak.clone(),
                 dir_gen,
@@ -982,6 +1042,8 @@ fn main() -> Result<(), slint::PlatformError> {
                         title: t.title.clone().into(),
                         path: t.path.to_string_lossy().to_string().into(),
                         is_active: idx == active_idx,
+                        is_this_pc: t.is_this_pc,
+                        is_network: t.is_network,
                     })
                     .collect();
 
@@ -1360,6 +1422,8 @@ fn main() -> Result<(), slint::PlatformError> {
                                 has_thumb: false,
                                 thumb: Image::default(),
                                 is_cloud,
+                                cloud_state: shell_interop::icons::detect_cloud_sync_state(&e.path, e.attrs, &cloud_roots).as_str().into(),
+                                is_drop_target: false,
                                 orig_index: i as i32,
                             }
                         })
@@ -2033,28 +2097,26 @@ fn main() -> Result<(), slint::PlatformError> {
                 let mut st = state.borrow_mut();
                 let new_id = st.next_tab_id;
                 st.next_tab_id += 1;
-                let path = st.current_path.clone();
-                let is_this_pc = st.is_this_pc_view;
-                let is_network = st.is_network_view;
-                let title = if is_this_pc {
-                    "This PC".to_string()
-                } else if is_network {
-                    "Network".to_string()
-                } else {
-                    path.file_name()
-                        .map(|f| f.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "Home".to_string())
-                };
+                let active_idx = st.active_tab_idx;
+                let h_back = st.history_back.clone();
+                let h_fwd = st.history_forward.clone();
+                if let Some(cur_tab) = st.tabs.get_mut(active_idx) {
+                    cur_tab.history_back = h_back;
+                    cur_tab.history_forward = h_fwd;
+                }
                 st.tabs.push(TabState {
                     id: new_id,
-                    title,
-                    path: path.clone(),
-                    is_this_pc,
-                    is_network,
+                    title: "This PC".to_string(),
+                    path: PathBuf::new(),
+                    is_this_pc: true,
+                    is_network: false,
                     history_back: Vec::new(),
                     history_forward: Vec::new(),
                 });
                 st.active_tab_idx = st.tabs.len() - 1;
+                st.is_this_pc_view = true;
+                st.is_network_view = false;
+                st.current_path = PathBuf::new();
                 st.history_back.clear();
                 st.history_forward.clear();
             }
@@ -2091,6 +2153,111 @@ fn main() -> Result<(), slint::PlatformError> {
             };
             if closed {
                 update_ui();
+            }
+        });
+    }
+
+    // 14. This PC drive selection (single-click selects without opening)
+    {
+        let main_window_weak = main_window.as_weak();
+        main_window.on_select_drive(move |letter| {
+            let letter_str = letter.to_string();
+            let drives = shell_interop::info::drives();
+            if let Some(d) = drives.iter().find(|d| d.path.eq_ignore_ascii_case(&letter_str) || letter_str.starts_with(&d.path)) {
+                if let Some(ui) = main_window_weak.upgrade() {
+                    let free_str = format_bytes(d.free);
+                    let total_str = format_bytes(d.total);
+                    ui.set_status_selection_info(format!("1 item selected | {} free of {}", free_str, total_str).into());
+                    let props = vec![
+                        PropertyItem { name: "Drive".into(), value: d.path.clone().into() },
+                        PropertyItem { name: "Label".into(), value: if d.label.is_empty() { "Local Disk".into() } else { d.label.clone().into() } },
+                        PropertyItem { name: "File system".into(), value: d.file_system.clone().into() },
+                        PropertyItem { name: "Free space".into(), value: free_str.into() },
+                        PropertyItem { name: "Total capacity".into(), value: total_str.into() },
+                    ];
+                    ui.set_item_properties(ModelRc::new(Rc::new(VecModel::from(props))));
+                    ui.set_preview_type("none".into());
+                    ui.set_has_preview_image(false);
+                }
+            }
+        });
+    }
+
+    // 15. Background click (deselects all) and right-click (native folder background context menu)
+    {
+        let main_window_weak = main_window.as_weak();
+        main_window.on_background_clicked(move || {
+            if let Some(ui) = main_window_weak.upgrade() {
+                ui.set_selected_index(-1);
+                ui.set_selected_path("".into());
+                ui.set_selected_drive_letter("".into());
+                ui.set_status_selection_info("".into());
+                ui.set_preview_type("none".into());
+                ui.set_has_preview_image(false);
+                ui.set_item_properties(ModelRc::new(Rc::new(VecModel::from(Vec::new()))));
+            }
+        });
+    }
+
+    {
+        let state = Rc::clone(&state);
+        main_window.on_background_right_clicked(move || {
+            let hwnd = get_active_hwnd();
+            let cur_path = {
+                let st = state.borrow();
+                if st.is_this_pc_view {
+                    "shell:::{20D04FE0-3AEA-1069-A2D8-08002B30309D}".to_string()
+                } else if st.is_network_view {
+                    "shell:::{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}".to_string()
+                } else {
+                    st.current_path.to_string_lossy().to_string()
+                }
+            };
+            if !cur_path.is_empty() {
+                let is_dark = shell_interop::system::is_dark_mode();
+                let _ = shell_interop::context_menu::show(hwnd, &[], Some(&cur_path), None, is_dark);
+            }
+        });
+    }
+
+    // 16. In-workspace Drag and Drop: dropping file into another folder in same directory
+    {
+        let state = Rc::clone(&state);
+        let update_ui = update_ui.clone();
+        main_window.on_item_dropped_on(move |src_idx, dst_idx| {
+            let hwnd = get_active_hwnd();
+            let (src_path, dst_folder) = {
+                let st = state.borrow();
+                let src = st.entries.get(src_idx as usize).map(|e| e.path.clone());
+                let dst = st.entries.get(dst_idx as usize).map(|e| e.path.clone());
+                (src, dst)
+            };
+            if let (Some(src), Some(dst)) = (src_path, dst_folder) {
+                if std::path::Path::new(&dst).is_dir() && src != dst {
+                    let _ = shell_interop::ops::transfer(hwnd, &[src], &dst, shell_interop::ops::Transfer::Move);
+                    update_ui();
+                }
+            }
+        });
+    }
+
+    // 17. In-workspace Drag and Drop: dropping file onto another tab header
+    {
+        let state = Rc::clone(&state);
+        let update_ui = update_ui.clone();
+        main_window.on_item_dropped_on_tab(move |src_idx, target_tab_idx| {
+            let hwnd = get_active_hwnd();
+            let (src_path, dst_folder) = {
+                let st = state.borrow();
+                let src = st.entries.get(src_idx as usize).map(|e| e.path.clone());
+                let dst = st.tabs.get(target_tab_idx as usize).map(|t| t.path.to_string_lossy().to_string());
+                (src, dst)
+            };
+            if let (Some(src), Some(dst)) = (src_path, dst_folder) {
+                if !dst.is_empty() && std::path::Path::new(&dst).is_dir() {
+                    let _ = shell_interop::ops::transfer(hwnd, &[src], &dst, shell_interop::ops::Transfer::Move);
+                    update_ui();
+                }
             }
         });
     }
